@@ -1,0 +1,454 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            
+            <div class="row">
+                <div class="col-md-8"><h4>Update Customer </h4></div>
+                <div class="col-md-4"><span class="pull-right"><i class="icmn-users"></i> {{customer.CustomerId}}</span></div>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="customerUpdateForm" name="customerForm" ng-submit="UpdateCustomer()" novalidate>
+                            <div class="row">
+                                <div class="form-group">
+
+                                    <div ng-class="{ 'has-error' : customerForm.Name.$invalid && !customerForm.Name.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Name</label>
+                                            <input type="text" name="Name" class="form-control" ng-model="customer.Name" required>
+                                            <p ng-show="customerForm.Name.$invalid && !customerForm.Name.$pristine" class="help-block">Name is required.</p>
+                                        </div>
+                                    </div>
+                                    <div ng-class="{ 'has-error' : customerForm.Mobile.$invalid && !customerForm.Mobile.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Mobile</label>
+                                            <input type="text" name="Mobile" class="form-control" ng-model="customer.Mobile" required>
+                                            <p ng-show="customerForm.Mobile.$invalid && !customerForm.Mobile.$pristine" class="help-block">Mobile is required.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div><br />
+
+
+                            <div class="row">
+                                <div class="form-group">
+
+
+
+                                    <div class="col-md-6">
+
+                                        <label>Operator</label>
+                                        <ui-select ng-model="customer.Operator" on-select="onSelectCallback($item, $model)" theme="bootstrap" style="width: 100%;">
+                                            <ui-select-match placeholder="Select...">{{$select.selected.Name}}</ui-select-match>
+                                            <ui-select-choices repeat="item in operatorList | filter: $select.search">
+                                                <div ng-bind-html="item.Name | highlight: $select.search"></div>
+                                                <!--<small ng-bind-html="item.Email | highlight: $select.search"></small>-->
+                                            </ui-select-choices>
+                                        </ui-select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label>Status </label> <br />
+                                        <ui-select ng-model="customer.Status" on-select="onSelectCallbackStatus($item, $model)" style="width: 100%;">
+                                            <ui-select-match placeholder="Select...">{{$select.selected}}</ui-select-match>
+                                            <ui-select-choices repeat="item in statusOptions | filter: $select.search">
+                                                <div ng-bind-html="item | highlight: $select.search"></div>
+                                                <!--<small ng-bind-html="item.Email | highlight: $select.search"></small>-->
+                                            </ui-select-choices>
+                                        </ui-select>
+                                    </div>
+
+
+
+                                </div>
+
+                            </div><br />
+
+                            <div class="row">
+                                <div class="form-group">
+
+                                    <div>
+                                        <div class=" col-md-6">
+                                            <label>Registration Date</label>
+                                            <div class='input-group date' id='datetimepickerCustomerRegDate'>
+                                                <input type='text' class="form-control" ng-model="customer.RegDate" data-date-time-picker />
+                                                <span class="input-group-addon">
+                                                    <i class="icmn-calendar"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class=" col-md-6">
+                                        <label>Due Date</label>
+                                        <div class='input-group date' id='datetimepickerCustomerDueDate'>
+                                            <input type='text' class="form-control" ng-model="customer.DueDate" data-date-time-picker />
+                                            <span class="input-group-addon">
+                                                <i class="icmn-calendar"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+
+
+
+
+                                </div>
+
+                            </div><br />
+                            <div class="row">
+                                <div class="form-group">
+
+                                    <div class="col-md-6">
+                                        <label>Has Bnet Router </label> <br />
+                                        <switch name="IsRouter" ng-model="customer.IsRouter" ng-change="changeCallback"></switch>
+
+                                    </div>
+
+                                </div>
+                            </div>
+                            <br />
+                            <div class="row">
+                                <div class="form-group">
+                                    <button class="btn btn-primary" type="submit" ng-disabled="customerForm.$invalid">Update</button>
+                                    <button class="btn btn-danger" type="button" sweetalert sweet-options="{{sweet.option}}" sweet-confirm-option="{{sweet.confirm}}" sweet-cancel-option="{{sweet.cancel}}" name="login-submit" sweet-on-cancel="checkCancel()" sweet-on-confirm="checkConfirm()">Delete</button>
+                                   
+                                </div>
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        // Sweet Alert
+        $('.swal-btn-basic').click(function (e) {
+            e.preventDefault();
+            swal("Here's a message!");
+        });
+
+        $('.swal-btn-text').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Here's a message!",
+                text: "It's pretty, isn't it?"
+            });
+        });
+
+        $('.swal-btn-success').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Good job!",
+                text: "You clicked the button!",
+                type: "success",
+                confirmButtonClass: "btn-success",
+                confirmButtonText: "Success"
+            });
+        });
+
+        $('.swal-btn-warning').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Are you sure?",
+                text: "Your will not be able to recover this file!",
+                type: "warning",
+                showCancelButton: true,
+                cancelButtonClass: "btn-default",
+                confirmButtonClass: "btn-warning",
+                confirmButtonText: "Remove",
+                closeOnConfirm: false
+            },
+            function () {
+                swal({
+                    title: "Deleted!",
+                    text: "File has been deleted",
+                    type: "success",
+                    confirmButtonClass: "btn-success"
+                });
+            });
+        });
+
+        $('.swal-btn-cancel').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Are you sure?",
+                text: "You will not be able to recover this imaginary file!",
+                type: "warning",
+                showCancelButton: true,
+                confirmButtonClass: "btn-danger",
+                confirmButtonText: "Yes, remove it",
+                cancelButtonText: "Cancel",
+                closeOnConfirm: false,
+                closeOnCancel: false
+            },
+            function (isConfirm) {
+                if (isConfirm) {
+                    swal({
+                        title: "Deleted!",
+                        text: "Your imaginary file has been deleted.",
+                        type: "success",
+                        confirmButtonClass: "btn-success"
+                    });
+                } else {
+                    swal({
+                        title: "Cancelled",
+                        text: "Your imaginary file is safe :)",
+                        type: "error",
+                        confirmButtonClass: "btn-danger"
+                    });
+                }
+            });
+        });
+
+        $('.swal-btn-custom-img').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Sweet!",
+                text: "Here's a custom image.",
+                confirmButtonClass: "btn-success",
+                imageUrl: '../assets/common/img/temp/avatars/1.jpg'
+            });
+        });
+
+        $('.swal-btn-info').click(function (e) {
+            e.preventDefault();
+            swal({
+                title: "Are you sure?",
+                text: "Your will not be able to recover this imaginary file!",
+                type: "info",
+                showCancelButton: true,
+                cancelButtonClass: "btn-default",
+                confirmButtonText: "Info",
+                confirmButtonClass: "btn-primary"
+            });
+        });
+
+
+        // Bootstrap Notify
+        $('#notify-basic').on('click', function () {
+            $.notify("Hello World");
+        });
+
+        $('#notify-passing-title').on('click', function () {
+            $.notify({
+                title: "Welcome:",
+                message: "This plugin has been provided to you by Robert McIntosh aka mouse0270"
+            });
+        });
+
+        $('#notify-passing-html').on('click', function () {
+            $.notify({
+                title: "<strong>Welcome:</strong> ",
+                message: "This plugin has been provided to you by Robert McIntosh aka <a href=\"https://twitter.com/Mouse0270\" target=\"_blank\">@mouse0270</a>"
+            });
+        });
+
+        $('#notify-url').on('click', function () {
+            $.notify({
+                message: "Check out my twitter account by clicking on this notification!",
+                url: "https://twitter.com/Mouse0270"
+            });
+        });
+
+        $('#notify-icomoon-premuim').on('click', function () {
+            $.notify({
+                icon: 'icmn-database',
+                message: "Everyone loves font icons! Use them in your notification!"
+            });
+        });
+
+        $('#notify-fontawesome').on('click', function () {
+            $.notify({
+                icon: 'fa fa-star',
+                title: 'Title',
+                message: "Everyone loves font icons! Use them in your notification!"
+            });
+        });
+
+        $('#notify-center').on('click', function () {
+            $.notify({
+                icon: 'font-icon font-icon-warning',
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                placement: {
+                    align: "center"
+                }
+            });
+        });
+
+        $('#notify-bottom').on('click', function () {
+            $.notify({
+                icon: 'font-icon font-icon-warning',
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                placement: {
+                    from: "bottom"
+                }
+            });
+        });
+
+        $('#notify-bottom-center').on('click', function () {
+            $.notify({
+                icon: 'font-icon font-icon-warning',
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                placement: {
+                    from: "bottom",
+                    align: "center"
+                }
+            });
+        });
+
+        $('#notify-default').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'default'
+            });
+        });
+
+        $('#notify-primary').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'primary'
+            });
+        });
+
+        $('#notify-secondary').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'secondary'
+            });
+        });
+
+        $('#notify-success').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'success'
+            });
+        });
+
+        $('#notify-warning').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'warning'
+            });
+        });
+
+        $('#notify-danger').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'danger'
+            });
+        });
+
+        $('#notify-info').on('click', function () {
+            $.notify({
+                title: '<strong>Heads up!</strong>',
+                message: 'You can use any of bootstraps other alert styles as well by default.'
+            }, {
+                type: 'info'
+            });
+        });
+
+    });
+</script>
+<!-- End Page Scripts -->

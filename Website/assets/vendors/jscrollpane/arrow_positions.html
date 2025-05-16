@@ -1,0 +1,1116 @@
+the controller will be instantiated and attached to the scope as specified in
+ * the component definition object. If you do not provide a `$scope` object in the `locals` param
+ * then the helper will create a new isolated scope as a child of `$rootScope`.
+ *
+ * If you are using `$element` or `$attrs` in the controller, make sure to provide them as `locals`.
+ * The `$element` must be a jqLite-wrapped DOM element, and `$attrs` should be an object that
+ * has all properties / functions that you are using in the controller. If this is getting too complex,
+ * you should compile the component instead and access the component's controller via the
+ * {@link angular.element#methods `controller`} function.
+ *
+ * See also the section on {@link guide/component#unit-testing-component-controllers unit-testing component controllers}
+ * in the guide.
+ *
+ * @param {string} componentName the name of the component whose controller we want to instantiate
+ * @param {Object} locals Injection locals for Controller.
+ * @param {Object=} bindings Properties to add to the controller before invoking the constructor. This is used
+ *                           to simulate the `bindToController` feature and simplify certain kinds of tests.
+ * @param {string=} ident Override the property name to use when attaching the controller to the scope.
+ * @return {Object} Instance of requested controller.
+ */
+angular.mock.$ComponentControllerProvider = ['$compileProvider',
+    function ComponentControllerProvider($compileProvider) {
+  this.$get = ['$controller','$injector', '$rootScope', function($controller, $injector, $rootScope) {
+    return function $componentController(componentName, locals, bindings, ident) {
+      // get all directives associated to the component name
+      var directives = $injector.get(componentName + 'Directive');
+      // look for those directives that are components
+      var candidateDirectives = directives.filter(function(directiveInfo) {
+        // components have controller, controllerAs and restrict:'E'
+        return directiveInfo.controller && directiveInfo.controllerAs && directiveInfo.restrict === 'E';
+      });
+      // check if valid directives found
+      if (candidateDirectives.length === 0) {
+        throw new Error('No component found');
+      }
+      if (candidateDirectives.length > 1) {
+        throw new Error('Too many components found');
+      }
+      // get the info of the component
+      var directiveInfo = candidateDirectives[0];
+      // create a scope if needed
+      locals = locals || {};
+      locals.$scope = locals.$scope || $rootScope.$new(true);
+      return $controller(directiveInfo.controller, locals, bindings, ident || directiveInfo.controllerAs);
+    };
+  }];
+}];
+
+
+/**
+ * @ngdoc module
+ * @name ngMock
+ * @packageName angular-mocks
+ * @description
+ *
+ * # ngMock
+ *
+ * The `ngMock` module provides support to inject and mock Angular services into unit tests.
+ * In addition, ngMock also extends various core ng services such that they can be
+ * inspected and controlled in a synchronous manner within test code.
+ *
+ *
+ * <div doc-module-components="ngMock"></div>
+ *
+ * @installation
+ *
+ *  First, download the file:
+ *  * [Google CDN](https://developers.google.com/speed/libraries/devguide#angularjs) e.g.
+ *    `"//ajax.googleapis.com/ajax/libs/angularjs/X.Y.Z/angular-mocks.js"`
+ *  * [NPM](https://www.npmjs.com/) e.g. `npm install angular-mocks@X.Y.Z`
+ *  * [Yarn](https://yarnpkg.com) e.g. `yarn add angular-mocks@X.Y.Z`
+ *  * [Bower](http://bower.io) e.g. `bower install angular-mocks#X.Y.Z`
+ *  * [code.angularjs.org](https://code.angularjs.org/) (discouraged for production use)  e.g.
+ *    `"//code.angularjs.org/X.Y.Z/angular-mocks.js"`
+ *
+ * where X.Y.Z is the AngularJS version you are running.
+ *
+ * Then, configure your test runner to load `angular-mocks.js` after `angular.js`.
+ * This example uses <a href="http://karma-runner.github.io/">Karma</a>:
+ *
+ * ```
+ * config.set({
+ *   files: [
+ *     'build/angular.js', // and other module files you need
+ *     'build/angular-mocks.js',
+ *     '<path/to/application/files>',
+ *     '<path/to/spec/files>'
+ *   ]
+ * });
+ * ```
+ *
+ * Including the `angular-mocks.js` file automatically adds the `ngMock` module, so your tests
+ *  are ready to go!
+ */
+angular.module('ngMock', ['ng']).provider({
+  $browser: angular.mock.$BrowserProvider,
+  $exceptionHandler: angular.mock.$ExceptionHandlerProvider,
+  $log: angular.mock.$LogProvider,
+  $interval: angular.mock.$IntervalProvider,
+  $rootElement: angular.mock.$RootElementProvider,
+  $componentController: angular.mock.$ComponentControllerProvider
+}).config(['$provide', '$compileProvider', function($provide, $compileProvider) {
+  $provide.decorator('$timeout', angular.mock.$TimeoutDecorator);
+  $provide.decorator('$$rAF', angular.mock.$RAFDecorator);
+  $provide.decorator('$rootScope', angular.mock.$RootScopeDecorator);
+  $provide.decorator('$controller', createControllerDecorator($compileProvider));
+  $provide.decorator('$httpBackend', angular.mock.$httpBackendDecorator);
+}]).info({ angularVersion: '1.6.5' });
+
+/**
+ * @ngdoc module
+ * @name ngMockE2E
+ * @module ngMockE2E
+ * @packageName angular-mocks
+ * @description
+ *
+ * The `ngMockE2E` is an angular module which contains mocks suitable for end-to-end testing.
+ * Currently there is only one mock present in this module -
+ * the {@link ngMockE2E.$httpBackend e2e $httpBackend} mock.
+ */
+angular.module('ngMockE2E', ['ng']).config(['$provide', function($provide) {
+  $provide.decorator('$httpBackend', angular.mock.e2e.$httpBackendDecorator);
+}]).info({ angularVersion: '1.6.5' });
+
+/**
+ * @ngdoc service
+ * @name $httpBackend
+ * @module ngMockE2E
+ * @description
+ * Fake HTTP backend implementation suitable for end-to-end testing or backend-less development of
+ * applications that use the {@link ng.$http $http service}.
+ *
+ * <div class="alert alert-info">
+ * **Note**: For fake http backend implementation suitable for unit testing please see
+ * {@link ngMock.$httpBackend unit-testing $httpBackend mock}.
+ * </div>
+ *
+ * This implementation can be used to respond with static or dynamic responses via the `when` api
+ * and its shortcuts (`whenGET`, `whenPOST`, etc) and optionally pass through requests to the
+ * real $httpBackend for specific requests (e.g. to interact with certain remote apis or to fetch
+ * templates from a webserver).
+ *
+ * As opposed to unit-testing, in an end-to-end testing scenario or in scenario when an application
+ * is being developed with the real backend api replaced with a mock, it is often desirable for
+ * certain category of requests to bypass the mock and issue a real http request (e.g. to fetch
+ * templates or static files from the webserver). To configure the backend with this behavior
+ * use the `passThrough` request handler of `when` instead of `respond`.
+ *
+ * Additionally, we don't want to manually have to flush mocked out requests like we do during unit
+ * testing. For this reason the e2e $httpBackend flushes mocked out requests
+ * automatically, closely simulating the behavior of the XMLHttpRequest object.
+ *
+ * To setup the application to run with this http backend, you have to create a module that depends
+ * on the `ngMockE2E` and your application modules and defines the fake backend:
+ *
+ * ```js
+ *   var myAppDev = angular.module('myAppDev', ['myApp', 'ngMockE2E']);
+ *   myAppDev.run(function($httpBackend) {
+ *     var phones = [{name: 'phone1'}, {name: 'phone2'}];
+ *
+ *     // returns the current list of phones
+ *     $httpBackend.whenGET('/phones').respond(phones);
+ *
+ *     // adds a new phone to the phones array
+ *     $httpBackend.whenPOST('/phones').respond(function(method, url, data) {
+ *       var phone = angular.fromJson(data);
+ *       phones.push(phone);
+ *       return [200, phone, {}];
+ *     });
+ *     $httpBackend.whenGET(/^\/templates\//).passThrough(); // Requests for templates are handled by the real server
+ *     //...
+ *   });
+ * ```
+ *
+ * Afterwards, bootstrap your app with this new module.
+ *
+ * ## Example
+ * <example name="httpbackend-e2e-testing" module="myAppE2E" deps="angular-mocks.js">
+ * <file name="app.js">
+ *   var myApp = angular.module('myApp', []);
+ *
+ *   myApp.controller('MainCtrl', function MainCtrl($http) {
+ *     var ctrl = this;
+ *
+ *     ctrl.phones = [];
+ *     ctrl.newPhone = {
+ *       name: ''
+ *     };
+ *
+ *     ctrl.getPhones = function() {
+ *       $http.get('/phones').then(function(response) {
+ *         ctrl.phones = response.data;
+ *       });
+ *     };
+ *
+ *     ctrl.addPhone = function(phone) {
+ *       $http.post('/phones', phone).then(function() {
+ *         ctrl.newPhone = {name: ''};
+ *         return ctrl.getPhones();
+ *       });
+ *     };
+ *
+ *     ctrl.getPhones();
+ *   });
+ * </file>
+ * <file name="e2e.js">
+ *   var myAppDev = angular.module('myAppE2E', ['myApp', 'ngMockE2E']);
+ *
+ *   myAppDev.run(function($httpBackend) {
+ *     var phones = [{name: 'phone1'}, {name: 'phone2'}];
+ *
+ *     // returns the current list of phones
+ *     $httpBackend.whenGET('/phones').respond(phones);
+ *
+ *     // adds a new phone to the phones array
+ *     $httpBackend.whenPOST('/phones').respond(function(method, url, data) {
+ *       var phone = angular.fromJson(data);
+ *       phones.push(phone);
+ *       return [200, phone, {}];
+ *     });
+ *   });
+ * </file>
+ * <file name="index.html">
+ *   <div ng-controller="MainCtrl as $ctrl">
+ *   <form name="newPhoneForm" ng-submit="$ctrl.addPhone($ctrl.newPhone)">
+ *     <input type="text" ng-model="$ctrl.newPhone.name">
+ *     <input type="submit" value="Add Phone">
+ *   </form>
+ *   <h1>Phones</h1>
+ *   <ul>
+ *     <li ng-repeat="phone in $ctrl.phones">{{phone.name}}</li>
+ *   </ul>
+ *   </div>
+ * </file>
+ * </example>
+ *
+ *
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#when
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition.
+ *
+ * @param {string} method HTTP method.
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(string|RegExp|function(string))=} data HTTP request body or function that receives
+ *   data string and returns true if the data is as expected.
+ * @param {(Object|function(Object))=} headers HTTP headers or function that receives http header
+ *   object and returns true if the headers match the current definition.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ *
+ *  - respond –
+ *    ```
+ *    { function([status,] data[, headers, statusText])
+ *    | function(function(method, url, data, headers, params)}
+ *    ```
+ *    – The respond method takes a set of static data to be returned or a function that can return
+ *    an array containing response status (number), response data (Array|Object|string), response
+ *    headers (Object), and the text for the status (string).
+ *  - passThrough – `{function()}` – Any request matching a backend definition with
+ *    `passThrough` handler will be passed through to the real backend (an XHR request will be made
+ *    to the server.)
+ *  - Both methods return the `requestHandler` object for possible overrides.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenGET
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for GET requests. For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenHEAD
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for HEAD requests. For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenDELETE
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for DELETE requests. For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenPOST
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for POST requests. For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(string|RegExp|function(string))=} data HTTP request body or function that receives
+ *   data string and returns true if the data is as expected.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenPUT
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for PUT requests.  For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(string|RegExp|function(string))=} data HTTP request body or function that receives
+ *   data string and returns true if the data is as expected.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenPATCH
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for PATCH requests.  For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(string|RegExp|function(string))=} data HTTP request body or function that receives
+ *   data string and returns true if the data is as expected.
+ * @param {(Object|function(Object))=} headers HTTP headers.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenJSONP
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition for JSONP requests. For more info see `when()`.
+ *
+ * @param {string|RegExp|function(string)=} url HTTP url or function that receives a url
+ *   and returns true if the url matches the current definition.
+ * @param {(Array)=} keys Array of keys to assign to regex matches in request url described on
+ *   {@link ngMock.$httpBackend $httpBackend mock}.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+/**
+ * @ngdoc method
+ * @name $httpBackend#whenRoute
+ * @module ngMockE2E
+ * @description
+ * Creates a new backend definition that compares only with the requested route.
+ *
+ * @param {string} method HTTP method.
+ * @param {string} url HTTP url string that supports colon param matching.
+ * @returns {requestHandler} Returns an object with `respond` and `passThrough` methods that
+ *   control how a matched request is handled. You can save this object for later use and invoke
+ *   `respond` or `passThrough` again in order to change how a matched request is handled.
+ */
+angular.mock.e2e = {};
+angular.mock.e2e.$httpBackendDecorator =
+  ['$rootScope', '$timeout', '$delegate', '$browser', createHttpBackendMock];
+
+
+/**
+ * @ngdoc type
+ * @name $rootScope.Scope
+ * @module ngMock
+ * @description
+ * {@link ng.$rootScope.Scope Scope} type decorated with helper methods useful for testing. These
+ * methods are automatically available on any {@link ng.$rootScope.Scope Scope} instance when
+ * `ngMock` module is loaded.
+ *
+ * In addition to all the regular `Scope` methods, the following helper methods are available:
+ */
+angular.mock.$RootScopeDecorator = ['$delegate', function($delegate) {
+
+  var $rootScopePrototype = Object.getPrototypeOf($delegate);
+
+  $rootScopePrototype.$countChildScopes = countChildScopes;
+  $rootScopePrototype.$countWatchers = countWatchers;
+
+  return $delegate;
+
+  // ------------------------------------------------------------------------------------------ //
+
+  /**
+   * @ngdoc method
+   * @name $rootScope.Scope#$countChildScopes
+   * @module ngMock
+   * @this $rootScope.Scope
+   * @description
+   * Counts all the direct and indirect child scopes of the current scope.
+   *
+   * The current scope is excluded from the count. The count includes all isolate child scopes.
+   *
+   * @returns {number} Total number of child scopes.
+   */
+  function countChildScopes() {
+    var count = 0; // exclude the current scope
+    var pendingChildHeads = [this.$$childHead];
+    var currentScope;
+
+    while (pendingChildHeads.length) {
+      currentScope = pendingChildHeads.shift();
+
+      while (currentScope) {
+        count += 1;
+        pendingChildHeads.push(currentScope.$$childHead);
+        currentScope = currentScope.$$nextSibling;
+      }
+    }
+
+    return count;
+  }
+
+
+  /**
+   * @ngdoc method
+   * @name $rootScope.Scope#$countWatchers
+   * @this $rootScope.Scope
+   * @module ngMock
+   * @description
+   * Counts all the watchers of direct and indirect child scopes of the current scope.
+   *
+   * The watchers of the current scope are included in the count and so are all the watchers of
+   * isolate child scopes.
+   *
+   * @returns {number} Total number of watchers.
+   */
+  function countWatchers() {
+    var count = this.$$watchers ? this.$$watchers.length : 0; // include the current scope
+    var pendingChildHeads = [this.$$childHead];
+    var currentScope;
+
+    while (pendingChildHeads.length) {
+      currentScope = pendingChildHeads.shift();
+
+      while (currentScope) {
+        count += currentScope.$$watchers ? currentScope.$$watchers.length : 0;
+        pendingChildHeads.push(currentScope.$$childHead);
+        currentScope = currentScope.$$nextSibling;
+      }
+    }
+
+    return count;
+  }
+}];
+
+
+(function(jasmineOrMocha) {
+
+  if (!jasmineOrMocha) {
+    return;
+  }
+
+  var currentSpec = null,
+      injectorState = new InjectorState(),
+      annotatedFunctions = [],
+      wasInjectorCreated = function() {
+        return !!currentSpec;
+      };
+
+  angular.mock.$$annotate = angular.injector.$$annotate;
+  angular.injector.$$annotate = function(fn) {
+    if (typeof fn === 'function' && !fn.$inject) {
+      annotatedFunctions.push(fn);
+    }
+    return angular.mock.$$annotate.apply(this, arguments);
+  };
+
+  /**
+   * @ngdoc function
+   * @name angular.mock.module
+   * @description
+   *
+   * *NOTE*: This function is also published on window for easy access.<br>
+   * *NOTE*: This function is declared ONLY WHEN running tests with jasmine or mocha
+   *
+   * This function registers a module configuration code. It collects the configuration information
+   * which will be used when the injector is created by {@link angular.mock.inject inject}.
+   *
+   * See {@link angular.mock.inject inject} for usage example
+   *
+   * @param {...(string|Function|Object)} fns any number of modules which are represented as string
+   *        aliases or as anonymous module initialization functions. The modules are used to
+   *        configure the injector. The 'ng' and 'ngMock' modules are automatically loaded. If an
+   *        object literal is passed each key-value pair will be registered on the module via
+   *        {@link auto.$provide $provide}.value, the key being the string name (or token) to associate
+   *        with the value on the injector.
+   */
+  var module = window.module = angular.mock.module = function() {
+    var moduleFns = Array.prototype.slice.call(arguments, 0);
+    return wasInjectorCreated() ? workFn() : workFn;
+    /////////////////////
+    function workFn() {
+      if (currentSpec.$injector) {
+        throw new Error('Injector already created, can not register a module!');
+      } else {
+        var fn, modules = currentSpec.$modules || (currentSpec.$modules = []);
+        angular.forEach(moduleFns, function(module) {
+          if (angular.isObject(module) && !angular.isArray(module)) {
+            fn = ['$provide', function($provide) {
+              angular.forEach(module, function(value, key) {
+                $provide.value(key, value);
+              });
+            }];
+          } else {
+            fn = module;
+          }
+          if (currentSpec.$providerInjector) {
+            currentSpec.$providerInjector.invoke(fn);
+          } else {
+            modules.push(fn);
+          }
+        });
+      }
+    }
+  };
+
+  module.$$beforeAllHook = (window.before || window.beforeAll);
+  module.$$afterAllHook = (window.after || window.afterAll);
+
+  // purely for testing ngMock itself
+  module.$$currentSpec = function(to) {
+    if (arguments.length === 0) return to;
+    currentSpec = to;
+  };
+
+  /**
+   * @ngdoc function
+   * @name angular.mock.module.sharedInjector
+   * @description
+   *
+   * *NOTE*: This function is declared ONLY WHEN running tests with jasmine or mocha
+   *
+   * This function ensures a single injector will be used for all tests in a given describe context.
+   * This contrasts with the default behaviour where a new injector is created per test case.
+   *
+   * Use sharedInjector when you want to take advantage of Jasmine's `beforeAll()`, or mocha's
+   * `before()` methods. Call `module.sharedInjector()` before you setup any other hooks that
+   * will create (i.e call `module()`) or use (i.e call `inject()`) the injector.
+   *
+   * You cannot call `sharedInjector()` from within a context already using `sharedInjector()`.
+   *
+   * ## Example
+   *
+   * Typically beforeAll is used to make many assertions about a single operation. This can
+   * cut down test run-time as the test setup doesn't need to be re-run, and enabling focussed
+   * tests each with a single assertion.
+   *
+   * ```js
+   * describe("Deep Thought", function() {
+   *
+   *   module.sharedInjector();
+   *
+   *   beforeAll(module("UltimateQuestion"));
+   *
+   *   beforeAll(inject(function(DeepThought) {
+   *     expect(DeepThought.answer).toBeUndefined();
+   *     DeepThought.generateAnswer();
+   *   }));
+   *
+   *   it("has calculated the answer correctly", inject(function(DeepThought) {
+   *     // Because of sharedInjector, we have access to the instance of the DeepThought service
+   *     // that was provided to the beforeAll() hook. Therefore we can test the generated answer
+   *     expect(DeepThought.answer).toBe(42);
+   *   }));
+   *
+   *   it("has calculated the answer within the expected time", inject(function(DeepThought) {
+   *     expect(DeepThought.runTimeMillennia).toBeLessThan(8000);
+   *   }));
+   *
+   *   it("has double checked the answer", inject(function(DeepThought) {
+   *     expect(DeepThought.absolutelySureItIsTheRightAnswer).toBe(true);
+   *   }));
+   *
+   * });
+   *
+   * ```
+   */
+  module.sharedInjector = function() {
+    if (!(module.$$beforeAllHook && module.$$afterAllHook)) {
+      throw Error('sharedInjector() cannot be used unless your test runner defines beforeAll/afterAll');
+    }
+
+    var initialized = false;
+
+    module.$$beforeAllHook(/** @this */ function() {
+      if (injectorState.shared) {
+        injectorState.sharedError = Error('sharedInjector() cannot be called inside a context that has already called sharedInjector()');
+        throw injectorState.sharedError;
+      }
+      initialized = true;
+      currentSpec = this;
+      injectorState.shared = true;
+    });
+
+    module.$$afterAllHook(function() {
+      if (initialized) {
+        injectorState = new InjectorState();
+        module.$$cleanup();
+      } else {
+        injectorState.sharedError = null;
+      }
+    });
+  };
+
+  module.$$beforeEach = function() {
+    if (injectorState.shared && currentSpec && currentSpec !== this) {
+      var state = currentSpec;
+      currentSpec = this;
+      angular.forEach(['$injector','$modules','$providerInjector', '$injectorStrict'], function(k) {
+        currentSpec[k] = state[k];
+        state[k] = null;
+      });
+    } else {
+      currentSpec = this;
+      originalRootElement = null;
+      annotatedFunctions = [];
+    }
+  };
+
+  module.$$afterEach = function() {
+    if (injectorState.cleanupAfterEach()) {
+      module.$$cleanup();
+    }
+  };
+
+  module.$$cleanup = function() {
+    var injector = currentSpec.$injector;
+
+    annotatedFunctions.forEach(function(fn) {
+      delete fn.$inject;
+    });
+
+    currentSpec.$injector = null;
+    currentSpec.$modules = null;
+    currentSpec.$providerInjector = null;
+    currentSpec = null;
+
+    if (injector) {
+      // Ensure `$rootElement` is instantiated, before checking `originalRootElement`
+      var $rootElement = injector.get('$rootElement');
+      var rootNode = $rootElement && $rootElement[0];
+      var cleanUpNodes = !originalRootElement ? [] : [originalRootElement[0]];
+      if (rootNode && (!originalRootElement || rootNode !== originalRootElement[0])) {
+        cleanUpNodes.push(rootNode);
+      }
+      angular.element.cleanData(cleanUpNodes);
+
+      // Ensure `$destroy()` is available, before calling it
+      // (a mocked `$rootScope` might not implement it (or not even be an object at all))
+      var $rootScope = injector.get('$rootScope');
+      if ($rootScope && $rootScope.$destroy) $rootScope.$destroy();
+    }
+
+    // clean up jquery's fragment cache
+    angular.forEach(angular.element.fragments, function(val, key) {
+      delete angular.element.fragments[key];
+    });
+
+    MockXhr.$$lastInstance = null;
+
+    angular.forEach(angular.callbacks, function(val, key) {
+      delete angular.callbacks[key];
+    });
+    angular.callbacks.$$counter = 0;
+  };
+
+  (window.beforeEach || window.setup)(module.$$beforeEach);
+  (window.afterEach || window.teardown)(module.$$afterEach);
+
+  /**
+   * @ngdoc function
+   * @name angular.mock.inject
+   * @description
+   *
+   * *NOTE*: This function is also published on window for easy access.<br>
+   * *NOTE*: This function is declared ONLY WHEN running tests with jasmine or mocha
+   *
+   * The inject function wraps a function into an injectable function. The inject() creates new
+   * instance of {@link auto.$injector $injector} per test, which is then used for
+   * resolving references.
+   *
+   *
+   * ## Resolving References (Underscore Wrapping)
+   * Often, we would like to inject a reference once, in a `beforeEach()` block and reuse this
+   * in multiple `it()` clauses. To be able to do this we must assign the reference to a variable
+   * that is declared in the scope of the `describe()` block. Since we would, most likely, want
+   * the variable to have the same name of the reference we have a problem, since the parameter
+   * to the `inject()` function would hide the outer variable.
+   *
+   * To help with this, the injected parameters can, optionally, be enclosed with underscores.
+   * These are ignored by the injector when the reference name is resolved.
+   *
+   * For example, the parameter `_myService_` would be resolved as the reference `myService`.
+   * Since it is available in the function body as `_myService_`, we can then assign it to a variable
+   * defined in an outer scope.
+   *
+   * ```
+   * // Defined out reference variable outside
+   * var myService;
+   *
+   * // Wrap the parameter in underscores
+   * beforeEach( inject( function(_myService_){
+   *   myService = _myService_;
+   * }));
+   *
+   * // Use myService in a series of tests.
+   * it('makes use of myService', function() {
+   *   myService.doStuff();
+   * });
+   *
+   * ```
+   *
+   * See also {@link angular.mock.module angular.mock.module}
+   *
+   * ## Example
+   * Example of what a typical jasmine tests looks like with the inject method.
+   * ```js
+   *
+   *   angular.module('myApplicationModule', [])
+   *       .value('mode', 'app')
+   *       .value('version', 'v1.0.1');
+   *
+   *
+   *   describe('MyApp', function() {
+   *
+   *     // You need to load modules that you want to test,
+   *     // it loads only the "ng" module by default.
+   *     beforeEach(module('myApplicationModule'));
+   *
+   *
+   *     // inject() is used to inject arguments of all given functions
+   *     it('should provide a version', inject(function(mode, version) {
+   *       expect(version).toEqual('v1.0.1');
+   *       expect(mode).toEqual('app');
+   *     }));
+   *
+   *
+   *     // The inject and module method can also be used inside of the it or beforeEach
+   *     it('should override a version and test the new version is injected', function() {
+   *       // module() takes functions or strings (module aliases)
+   *       module(function($provide) {
+   *         $provide.value('version', 'overridden'); // override version here
+   *       });
+   *
+   *       inject(function(version) {
+   *         expect(version).toEqual('overridden');
+   *       });
+   *     });
+   *   });
+   *
+   * ```
+   *
+   * @param {...Function} fns any number of functions which will be injected using the injector.
+   */
+
+
+
+  var ErrorAddingDeclarationLocationStack = function ErrorAddingDeclarationLocationStack(e, errorForStack) {
+    this.message = e.message;
+    this.name = e.name;
+    if (e.line) this.line = e.line;
+    if (e.sourceId) this.sourceId = e.sourceId;
+    if (e.stack && errorForStack)
+      this.stack = e.stack + '\n' + errorForStack.stack;
+    if (e.stackArray) this.stackArray = e.stackArray;
+  };
+  ErrorAddingDeclarationLocationStack.prototype = Error.prototype;
+
+  window.inject = angular.mock.inject = function() {
+    var blockFns = Array.prototype.slice.call(arguments, 0);
+    var errorForStack = new Error('Declaration Location');
+    // IE10+ and PhanthomJS do not set stack trace information, until the error is thrown
+    if (!errorForStack.stack) {
+      try {
+        throw errorForStack;
+      } catch (e) { /* empty */ }
+    }
+    return wasInjectorCreated() ? WorkFn.call(currentSpec) : WorkFn;
+    /////////////////////
+    function WorkFn() {
+      var modules = currentSpec.$modules || [];
+      var strictDi = !!currentSpec.$injectorStrict;
+      modules.unshift(['$injector', function($injector) {
+        currentSpec.$providerInjector = $injector;
+      }]);
+      modules.unshift('ngMock');
+      modules.unshift('ng');
+      var injector = currentSpec.$injector;
+      if (!injector) {
+        if (strictDi) {
+          // If strictDi is enabled, annotate the providerInjector blocks
+          angular.forEach(modules, function(moduleFn) {
+            if (typeof moduleFn === 'function') {
+              angular.injector.$$annotate(moduleFn);
+            }
+          });
+        }
+        injector = currentSpec.$injector = angular.injector(modules, strictDi);
+        currentSpec.$injectorStrict = strictDi;
+      }
+      for (var i = 0, ii = blockFns.length; i < ii; i++) {
+        if (currentSpec.$injectorStrict) {
+          // If the injector is strict / strictDi, and the spec wants to inject using automatic
+          // annotation, then annotate the function here.
+          injector.annotate(blockFns[i]);
+        }
+        try {
+          injector.invoke(blockFns[i] || angular.noop, this);
+        } catch (e) {
+          if (e.stack && errorForStack) {
+            throw new ErrorAddingDeclarationLocationStack(e, errorForStack);
+          }
+          throw e;
+        } finally {
+          errorForStack = null;
+        }
+      }
+    }
+  };
+
+
+  angular.mock.inject.strictDi = function(value) {
+    value = arguments.length ? !!value : true;
+    return wasInjectorCreated() ? workFn() : workFn;
+
+    function workFn() {
+      if (value !== currentSpec.$injectorStrict) {
+        if (currentSpec.$injector) {
+          throw new Error('Injector already created, can not modify strict annotations');
+        } else {
+          currentSpec.$injectorStrict = value;
+        }
+      }
+    }
+  };
+
+  function InjectorState() {
+    this.shared = false;
+    this.sharedError = null;
+
+    this.cleanupAfterEach = function() {
+      return !this.shared || this.sharedError;
+    };
+  }
+})(window.jasmine || window.mocha);
+
+'use strict';
+
+(function() {
+  /**
+   * Triggers a browser event. Attempts to choose the right event if one is
+   * not specified.
+   *
+   * @param {Object} element Either a wrapped jQuery/jqLite node or a DOMElement
+   * @param {string} eventType Optional event type
+   * @param {Object=} eventData An optional object which contains additional event data (such as x,y
+   * coordinates, keys, etc...) that are passed into the event when triggered
+   */
+  window.browserTrigger = function browserTrigger(element, eventType, eventData) {
+    if (element && !element.nodeName) element = element[0];
+    if (!element) return;
+
+    eventData = eventData || {};
+    var relatedTarget = eventData.relatedTarget || element;
+    var keys = eventData.keys;
+    var x = eventData.x;
+    var y = eventData.y;
+
+    var inputType = (element.type) ? element.type.toLowerCase() : null,
+        nodeName = element.nodeName.toLowerCase();
+    if (!eventType) {
+      eventType = {
+        'text':            'change',
+        'textarea':        'change',
+        'hidden':          'change',
+        'password':        'change',
+        'button':          'click',
+        'submit':          'click',
+        'reset':           'click',
+        'image':           'click',
+        'checkbox':        'click',
+        'radio':           'click',
+        'select-one':      'change',
+        'select-multiple': 'change',
+        '_default_':       'click'
+      }[inputType || '_default_'];
+    }
+
+    if (nodeName === 'option') {
+      element.parentNode.value = element.value;
+      element = element.parentNode;
+      eventType = 'change';
+    }
+
+    keys = keys || [];
+    function pressed(key) {
+      return keys.indexOf(key) !== -1;
+    }
+
+    var evnt;
+    if (/transitionend/.test(eventType)) {
+      if (window.WebKitTransitionEvent) {
+        evnt = new window.WebKitTransitionEvent(eventType, eventData);
+        evnt.initEvent(eventType, false, true);
+      } else {
+        try {
+          evnt = new window.TransitionEvent(eventType, eventData);
+        } catch (e) {
+          evnt = window.document.createEvent('TransitionEvent');
+          evnt.initTransitionEvent(eventType, null, null, null, eventData.elapsedTime || 0);
+        }
+      }
+    } else if (/animationend/.test(eventType)) {
+      if (window.WebKitAnimationEvent) {
+        evnt = new window.WebKitAnimationEvent(eventType, eventData);
+        evnt.initEvent(eventType, false, true);
+      } else {
+        try {
+          evnt = new window.AnimationEvent(eventType, eventData);
+        } catch (e) {
+          evnt = window.document.createEvent('AnimationEvent');
+          evnt.initAnimationEvent(eventType, null, null, null, eventData.elapsedTime || 0);
+        }
+      }
+    } else if (/touch/.test(eventType) && supportsTouchEvents()) {
+      evnt = createTouchEvent(element, eventType, x, y);
+    } else if (/key/.test(eventType)) {
+      evnt = window.document.createEvent('Events');
+      evnt.initEvent(eventType, eventData.bubbles, eventData.cancelable);
+      evnt.view = window;
+      evnt.ctrlKey = pressed('ctrl');
+      evnt.altKey = pressed('alt');
+      evnt.shiftKey = pressed('shift');
+      evnt.metaKey = pressed('meta');
+      evnt.keyCode = eventData.keyCode;
+      evnt.charCode = eventData.charCode;
+      evnt.which = eventData.which;
+    } else {
+      evnt = window.document.createEvent('MouseEvents');
+      x = x || 0;
+      y = y || 0;
+      evnt.initMouseEvent(eventType, true, true, window, 0, x, y, x, y, pressed('ctrl'),
+          pressed('alt'), pressed('shift'), pressed('meta'), 0, relatedTarget);
+    }
+
+    /* we're unable to change the timeStamp value directly so this
+     * is only here to allow for testing where the timeStamp value is
+     * read */
+    evnt.$manualTimeStamp = eventData.timeStamp;
+
+    if (!evnt) return;
+
+    var originalPreventDefault = evnt.preventDefault,
+        appWindow = element.ownerDocument.defaultView,
+        fakeProcessDefault = true,
+        finalProcessDefault,
+        angular = appWindow.angular || {};
+
+    // igor: temporary fix for https://bugzilla.mozilla.org/show_bug.cgi?id=684208
+    angular['ff-684208-preventDefault'] = false;
+    evnt.preventDefault = function() {
+      fakeProcessDefault = false;
+      return originalPreventDefault.apply(evnt, arguments);
+    };
+
+    if (!eventData.bubbles || supportsEventBubblingInDetachedTree() || isAttachedToDocument(element)) {
+      element.dispatchEvent(evnt);
+    } else {
+      triggerForPath(element, evnt);
+    }
+
+    finalProcessDefault = !(angular['ff-684208-preventDefault'] || !fakeProcessDefault);
+
+    delete angular['ff-684208-preventDefault'];
+
+    return finalProcessDefault;
+  };
+
+  function supportsTouchEvents() {
+    if ('_cached' in supportsTouchEvents) {
+      return supportsTouchEvents._cached;
+    }
+    if (!window.document.createTouch || !window.document.createTouchList) {
+      supportsTouchEvents._cached = false;
+      return false;
+    }
+    try {
+      window.document.createEvent('TouchEvent');
+    } catch (e) {
+      supportsTouchEvents._cached = false;
+      return false;
+    }
+    supportsTouchEvents._cached = true;
+    return true;
+  }
+
+  function createTouchEvent(element, eventType, x, y) {
+    var evnt = new window.Event(eventType);
+    x = x || 0;
+    y = y || 0;
+
+    var touch = window.document.createTouch(window, element, Date.now(), x, y, x, y);
+    var touches = window.document.createTouchList(touch);
+
+    evnt.touches = touches;
+
+    return evnt;
+  }
+
+  function supportsEventBubblingInDetachedTree() {
+    if ('_cached' in supportsEventBubblingInDetachedTree) {
+      return supportsEventBubblingInDetachedTree._cached;
+    }
+    supportsEventBubblingInDetachedTree._cached = false;
+    var doc = window.document;
+    if (doc) {
+      var parent = doc.createElement('div'),
+          child = parent.cloneNode();
+      parent.appendChild(child);
+      parent.addEventListener('e', function() {
+        supportsEventBubblingInDetachedTree._cached = true;
+      });
+      var evnt = window.document.createEvent('Events');
+      evnt.initEvent('e', true, true);
+      child.dispatchEvent(evnt);
+    }
+    return supportsEventBubblingInDetachedTree._cached;
+  }
+
+  function triggerForPath(element, evnt) {
+    var stop = false;
+
+    var _stopPropagation = evnt.stopPropagation;
+    evnt.stopPropagation = function() {
+      stop = true;
+      _stopPropagation.apply(evnt, arguments);
+    };
+    patchEventTargetForBubbling(evnt, element);
+    do {
+      element.dispatchEvent(evnt);
+      // eslint-disable-next-line no-unmodified-loop-condition
+    } while (!stop && (element = element.parentNode));
+  }
+
+  function patchEventTargetForBubbling(event, target) {
+    event._target = target;
+    Object.defineProperty(event, 'target', {get: function() { return this._target;}});
+  }
+
+  function isAttachedToDocument(element) {
+    while ((element = element.parentNode)) {
+        if (element === window) {
+            return true;
+        }
+    }
+    return false;
+  }
+})();
+
+
+})(window, window.angular);
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        

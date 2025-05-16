@@ -1,0 +1,147 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h3>
+                Add Operator
+
+            </h3>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="operatorForm" name="operatorForm" ng-submit="AddOperator()" novalidate>
+                            <div class="row">
+
+                                <div class="form-group">
+                                    <div class="col-md-6" ng-class="{ 'has-error' : operatorForm.Name.$invalid && !operatorForm.Name.$pristine }">
+                                        <label>Name</label>
+                                        <input type="text" name="Name" class="form-control" ng-model="operator.Name" required>
+                                        <p ng-show="operatorForm.Name.$invalid && !operatorForm.Name.$pristine" class="help-block">Name is required.</p>
+                                    </div>
+                                    <div class="col-md-6" ng-class="{ 'has-error' : operatorForm.Email.$invalid && !operatorForm.Email.$pristine }">
+                                        <label>Email</label>
+                                        <input type="email" name="Email" class="form-control" ng-model="operator.Email" required>
+                                        <p ng-show="operatorForm.Email.$invalid && !operatorForm.Email.$pristine" class="help-block">Valid Email ID is required.</p>
+                                    </div>
+                                </div>
+
+                                
+
+                            </div><br/>
+                            <div class="row">
+
+
+                                <div class="form-group" >
+                                    <div class="col-md-6" ng-class="{ 'has-error' : operatorForm.Mobile.$invalid && !operatorForm.Mobile.$pristine }">
+                                        <label>Mobile</label>
+                                        <input type="text" name="Mobile" class="form-control" ng-model="operator.Mobile" required>
+                                        <p ng-show="operatorForm.Mobile.$invalid && !operatorForm.Mobile.$pristine" class="help-block">Mobile is required.</p>
+                                    </div>
+                                    <div class=" col-md-6">
+                                        <label>Hiring Date</label>
+                                        <div class='input-group date' id='datetimepicker1'>
+                                            <input type='text' class="form-control" ng-model="operator.RegDate" data-date-time-picker />
+                                            <span class="input-group-addon">
+                                                <i class="icmn-calendar"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+
+                              
+                            </div>
+                            <br />
+                            <div class="row">
+                                <div class="form-group">
+                                    <button class="btn btn-primary" type="submit" ng-disabled="operatorForm.$invalid">Add</button>
+                                </div>
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->

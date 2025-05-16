@@ -1,0 +1,117 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h3>
+                Edit Tags
+
+            </h3>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="tagsEditForm" name="tagsEditForm" ng-submit="UpdateTags()" novalidate>
+                            <div class="row">
+
+                                <div class="form-group">
+                                    <div class="col-md-12" ng-class="{ 'has-error' : tagsEditForm.Name.$invalid && !tagsEditForm.Name.$pristine }">
+                                        <label>Name</label>
+                                        <input type="text" name="Name" class="form-control" ng-model="editedTags.Name" required>
+                                        <p ng-show="tagsEditForm.Name.$invalid && !tagsEditForm.Name.$pristine" class="help-block">Tags Name is required.</p>
+                                    </div>
+
+                                </div>
+
+                            </div> <br/>
+   
+                            <div class="row">
+                                <div class="form-group">
+                                    <button class="btn btn-primary" type="submit" ng-disabled="tagsEditForm.$invalid">Update</button>
+                                </div>
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->

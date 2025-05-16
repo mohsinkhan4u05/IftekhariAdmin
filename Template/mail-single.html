@@ -1,0 +1,801 @@
+ce
+                    }
+                };
+            }
+
+            // source: "http://www.test.com/url.json"
+            if (typeof this.options.source === "string") {
+                this.options.source = {
+                    group: {
+                        ajax: {
+                            url: this.options.source
+                        }
+                    }
+                };
+            }
+
+            if (this.options.source.ajax) {
+                this.options.source = {
+                    group: {
+                        ajax: this.options.source.ajax
+                    }
+                };
+            }
+
+            // source: {data: ['item1', 'item2'], url: "http://www.test.com/url.json"}
+            if (this.options.source.url || this.options.source.data) {
+                this.options.source = {
+                    group: this.options.source
+                };
+            }
+
+            var group,
+                groupSource,
+                tmpAjax;
+
+            for (group in this.options.source) {
+                if (!this.options.source.hasOwnProperty(group)) continue;
+
+                groupSource = this.options.source[group];
+
+                // source: {group: "http://www.test.com/url.json"}
+                if (typeof groupSource === "string") {
+                    groupSource = {
+                        ajax: {
+                            url: groupSource
+                        }
+                    };
+                }
+
+                // source: {group: {url: ["http://www.test.com/url.json", "json.path"]}}
+                tmpAjax = groupSource.url || groupSource.ajax;
+                if (Array.isArray(tmpAjax)) {
+                    groupSource.ajax = typeof tmpAjax[0] === "string" ? {
+                            url: tmpAjax[0]
+                        } : tmpAjax[0];
+                    groupSource.ajax.path = groupSource.ajax.path || tmpAjax[1] || null;
+                    delete groupSource.url;
+                } else {
+                    // source: {group: {url: {url: "http://www.test.com/url.json", method: "GET"}}}
+                    // source: {group: {url: "http://www.test.com/url.json", dataType: "jsonp"}}
+                    if (typeof groupSource.url === "object") {
+                        groupSource.ajax = groupSource.url;
+                    } else if (typeof groupSource.url === "string") {
+                        groupSource.ajax = {
+                            url: groupSource.url
+                        };
+                    }
+                    delete groupSource.url;
+                }
+
+                if (!groupSource.data && !groupSource.ajax) {
+
+                    // {debug}
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'unifySourceFormat()',
+                            'arguments': JSON.stringify(this.options.source),
+                            'message': 'Undefined "options.source.' + group + '.[data|ajax]" is Missing - Typeahead dropped'
+                        });
+
+                        _debug.print();
+                    }
+                    // {/debug}
+
+                    return false;
+                }
+
+                if (groupSource.display && !Array.isArray(groupSource.display)) {
+                    groupSource.display = [groupSource.display];
+                }
+
+                groupSource.minLength = typeof groupSource.minLength === "number" ?
+                    groupSource.minLength :
+                    this.options.minLength;
+                groupSource.maxLength = typeof groupSource.maxLength === "number" ?
+                    groupSource.maxLength :
+                    this.options.maxLength;
+                groupSource.dynamic = typeof groupSource.dynamic === "boolean" || this.options.dynamic;
+
+                if (groupSource.minLength > groupSource.maxLength) {
+                    groupSource.minLength = groupSource.maxLength;
+                }
+                this.options.source[group] = groupSource;
+
+                if (this.options.source[group].dynamic) {
+                    this.dynamicGroups.push(group);
+                }
+
+                groupSource.cache = typeof groupSource.cache !== "undefined" ?
+                    this._validateCacheMethod(groupSource.cache) :
+                    this.options.cache;
+
+                if (groupSource.compression) {
+                    if (typeof LZString !== 'object' || !groupSource.cache) {
+                        // {debug}
+                        if (this.options.debug) {
+                            _debug.log({
+                                'node': this.selector,
+                                'function': 'unifySourceFormat()',
+                                'message': 'Missing LZString Library or group.cache, no compression will occur on group: ' + group
+                            });
+
+                            _debug.print();
+                        }
+                        // {/debug}
+                        groupSource.compression = false;
+                    }
+                }
+            }
+
+            this.hasDynamicGroups = this.options.dynamic || !!this.dynamicGroups.length;
+
+            return true;
+        },
+
+        init: function () {
+
+            this.helper.executeCallback.call(this, this.options.callback.onInit, [this.node]);
+
+            this.container = this.node.closest('.' + this.options.selector.container);
+
+            // {debug}
+            if (this.options.debug) {
+                _debug.log({
+                    'node': this.selector,
+                    'function': 'init()',
+                    //'arguments': JSON.stringify(this.options),
+                    'message': 'OK - Typeahead activated on ' + this.selector
+                });
+
+                _debug.print();
+            }
+            // {/debug}
+
+        },
+
+        delegateEvents: function () {
+
+            var scope = this,
+                events = [
+                    'focus' + this.namespace,
+                    'input' + this.namespace,
+                    'propertychange' + this.namespace,  // IE8 Fix
+                    'keydown' + this.namespace,
+                    'keyup' + this.namespace,           // IE9 Fix
+                    'search' + this.namespace,
+                    'generate' + this.namespace
+                ];
+
+            // #149 - Adding support for Mobiles
+            $('html').on("touchmove", function () {
+                scope.hasDragged = true;
+            }).on("touchstart", function () {
+                scope.hasDragged = false;
+            });
+
+            this.node.closest('form').on("submit", function (e) {
+                if (scope.options.mustSelectItem && scope.helper.isEmpty(scope.item)) {
+                    e.preventDefault();
+                    return;
+                }
+
+                if (!scope.options.backdropOnFocus) {
+                    scope.hideLayout();
+                }
+
+                if (scope.options.callback.onSubmit) {
+                    return scope.helper.executeCallback.call(scope, scope.options.callback.onSubmit, [scope.node, this, scope.item, e]);
+                }
+            }).on("reset", function () {
+                // #221 - Reset Typeahead on form reset.
+                // setTimeout to re-queue the `input.typeahead` event at the end
+                setTimeout(function () {
+                    scope.node.trigger('input' + scope.namespace);
+                    // #243 - minLength: 0 opens the Typeahead results
+                    scope.hideLayout();
+                });
+            });
+
+            // IE8 fix
+            var preventNextEvent = false;
+
+            // IE10/11 fix
+            if (this.node.attr('placeholder') && (_isIE10 || _isIE11)) {
+                var preventInputEvent = true;
+
+                this.node.on("focusin focusout", function () {
+                    preventInputEvent = !!(!this.value && this.placeholder);
+                });
+
+                this.node.on("input", function (e) {
+                    if (preventInputEvent) {
+                        e.stopImmediatePropagation();
+                        preventInputEvent = false;
+                    }
+                });
+            }
+
+            this.node.off(this.namespace).on(events.join(' '), function (e, originalEvent) {
+                switch (e.type) {
+                    case "generate":
+                        scope.generateSource(Object.keys(scope.options.source));
+                        break;
+                    case "focus":
+                        if (scope.focusOnly) {
+                            scope.focusOnly = false;
+                            break;
+                        }
+                        if (scope.options.backdropOnFocus) {
+                            scope.buildBackdropLayout();
+                            scope.showLayout();
+                        }
+                        if (scope.options.searchOnFocus) {
+                            scope.deferred = $.Deferred();
+                            scope.generateSource();
+                        }
+                        break;
+                    case "keydown":
+                        if (e.keyCode && ~[9, 13, 27, 38, 39, 40].indexOf(e.keyCode)) {
+                            preventNextEvent = true;
+                            scope.navigate(e);
+                        }
+                        break;
+                    case "keyup":
+                        if (_isIE9 && scope.node[0].value.replace(/^\s+/, '').toString().length < scope.query.length) {
+                            scope.node.trigger('input' + scope.namespace);
+                        }
+                        break;
+                    case "propertychange":
+                        if (preventNextEvent) {
+                            preventNextEvent = false;
+                            break;
+                        }
+                    case "input":
+                        scope.deferred = $.Deferred();
+                        scope.rawQuery = scope.node[0].value.toString();
+                        scope.query = scope.rawQuery.replace(/^\s+/, '');
+
+                        // #195 Trigger an onCancel event if the Typeahead is cleared
+                        if (scope.rawQuery === "" && scope.query === "") {
+                            e.originalEvent = originalEvent || {};
+                            scope.helper.executeCallback.call(scope, scope.options.callback.onCancel, [scope.node, e]);
+                        }
+
+                        scope.options.cancelButton && scope.toggleCancelButtonVisibility();
+
+                        if (scope.options.hint && scope.hint.container && scope.hint.container.val() !== '') {
+                            if (scope.hint.container.val().indexOf(scope.rawQuery) !== 0) {
+                                scope.hint.container.val('');
+                            }
+                        }
+
+                        if (scope.hasDynamicGroups) {
+                            scope.helper.typeWatch(function () {
+                                scope.generateSource();
+                            }, scope.options.delay);
+                        } else {
+                            scope.generateSource();
+                        }
+                        break;
+                    case "search":
+                        scope.searchResult();
+                        scope.buildLayout();
+
+                        if (scope.result.length || (scope.searchGroups.length && scope.options.emptyTemplate && scope.query.length)) {
+                            scope.showLayout();
+                        } else {
+                            scope.hideLayout();
+                        }
+
+                        //@TODO fix onDropdownFilter + tests
+
+                        scope.deferred && scope.deferred.resolve();
+                        break;
+                }
+
+                return scope.deferred && scope.deferred.promise();
+            });
+
+            if (this.options.generateOnLoad) {
+                this.node.trigger('generate' + this.namespace);
+            }
+
+        },
+
+        filterGenerateSource: function () {
+            this.searchGroups = [];
+            this.generateGroups = [];
+
+            for (var group in this.options.source) {
+                if (!this.options.source.hasOwnProperty(group)) continue;
+                if (this.query.length >= this.options.source[group].minLength &&
+                    this.query.length <= this.options.source[group].maxLength) {
+
+                    this.searchGroups.push(group);
+                    if (!this.options.source[group].dynamic && this.source[group]) {
+                        continue;
+                    }
+                    this.generateGroups.push(group);
+                }
+            }
+        },
+
+        generateSource: function (generateGroups) {
+            this.filterGenerateSource();
+            if (Array.isArray(generateGroups) && generateGroups.length) {
+                this.generateGroups = generateGroups;
+            } else if (!this.generateGroups.length) {
+                this.node.trigger('search' + this.namespace);
+                return;
+            }
+
+            this.requestGroups = [];
+            this.generatedGroupCount = 0;
+            this.options.loadingAnimation && this.container.addClass('loading');
+
+            if (!this.helper.isEmpty(this.xhr)) {
+                for (var i in this.xhr) {
+                    if (!this.xhr.hasOwnProperty(i)) continue;
+                    this.xhr[i].abort();
+                }
+                this.xhr = {};
+            }
+
+            var scope = this,
+                group,
+                groupData,
+                groupSource,
+                cache,
+                compression,
+                dataInStorage,
+                isValidStorage;
+
+            for (var i = 0, ii = this.generateGroups.length; i < ii; ++i) {
+                group = this.generateGroups[i];
+                groupSource = this.options.source[group];
+                cache = groupSource.cache;
+                compression = groupSource.compression;
+
+                if (cache) {
+                    dataInStorage = window[cache].getItem('TYPEAHEAD_' + this.selector + ":" + group);
+                    if (dataInStorage) {
+                        if (compression) {
+                            dataInStorage = LZString.decompressFromUTF16(dataInStorage);
+                        }
+
+                        isValidStorage = false;
+                        try {
+                            dataInStorage = JSON.parse(dataInStorage + "");
+
+                            if (dataInStorage.data && dataInStorage.ttl > new Date().getTime()) {
+
+                                this.populateSource(dataInStorage.data, group);
+                                isValidStorage = true;
+
+                                // {debug}
+                                if (this.options.debug) {
+                                    _debug.log({
+                                        'node': this.selector,
+                                        'function': 'generateSource()',
+                                        'message': 'Source for group "' + group + '" found in ' + cache
+                                    });
+                                    _debug.print();
+                                }
+                                // {/debug}
+
+                            } else {
+                                window[cache].removeItem('TYPEAHEAD_' + this.selector + ":" + group);
+                            }
+                        } catch (error) {
+                        }
+
+                        if (isValidStorage) continue;
+                    }
+                }
+
+                if (groupSource.data && !groupSource.ajax) {
+                    // #198 Add support for async data source
+                    if (typeof groupSource.data === "function") {
+                        groupData = groupSource.data.call(this);
+                        if (Array.isArray(groupData)) {
+                            scope.populateSource(groupData, group);
+                        } else if (typeof groupData.promise === "function") {
+                            (function (group) {
+                                $.when(groupData).then(function (deferredData) {
+                                    if (deferredData && Array.isArray(deferredData)) {
+                                        scope.populateSource(deferredData, group);
+                                    }
+                                });
+                            })(group);
+                        }
+                    } else {
+                        this.populateSource(
+                            $.extend(true, [], groupSource.data),
+                            group
+                        );
+                    }
+                    continue;
+                }
+
+                if (groupSource.ajax) {
+                    if (!this.requests[group]) {
+                        this.requests[group] = this.generateRequestObject(group);
+                    }
+                    this.requestGroups.push(group);
+                }
+            }
+
+            if (this.requestGroups.length) {
+                this.handleRequests();
+            }
+
+            return !!this.generateGroups.length;
+        },
+
+        generateRequestObject: function (group) {
+
+            var scope = this,
+                groupSource = this.options.source[group];
+
+            var xhrObject = {
+                request: {
+                    url: groupSource.ajax.url || null,
+                    dataType: 'json',
+                    beforeSend: function (jqXHR, options) {
+                        // Important to call .abort() in case of dynamic requests
+                        scope.xhr[group] = jqXHR;
+
+                        var beforeSend = scope.requests[group].callback.beforeSend || groupSource.ajax.beforeSend;
+                        typeof beforeSend === "function" && beforeSend.apply(null, arguments);
+                    }
+                },
+                callback: {
+                    beforeSend: null,
+                    done: null,
+                    fail: null,
+                    then: null,
+                    always: null
+                },
+                extra: {
+                    path: groupSource.ajax.path || null,
+                    group: group
+                },
+                validForGroup: [group]
+            };
+
+            if (typeof groupSource.ajax !== "function") {
+                if (groupSource.ajax instanceof Object) {
+                    xhrObject = this.extendXhrObject(xhrObject, groupSource.ajax);
+                }
+
+                if (Object.keys(this.options.source).length > 1) {
+                    for (var _group in this.requests) {
+                        if (!this.requests.hasOwnProperty(_group)) continue;
+                        if (this.requests[_group].isDuplicated) continue;
+
+                        if (xhrObject.request.url && xhrObject.request.url === this.requests[_group].request.url) {
+                            this.requests[_group].validForGroup.push(group);
+                            xhrObject.isDuplicated = true;
+                            delete xhrObject.validForGroup;
+                        }
+                    }
+                }
+            }
+
+            return xhrObject;
+        },
+
+        extendXhrObject: function (xhrObject, groupRequest) {
+
+            if (typeof groupRequest.callback === "object") {
+                xhrObject.callback = groupRequest.callback;
+                delete groupRequest.callback;
+            }
+
+            // #132 Fixed beforeSend when using a function as the request object
+            if (typeof groupRequest.beforeSend === "function") {
+                xhrObject.callback.beforeSend = groupRequest.beforeSend;
+                delete groupRequest.beforeSend;
+            }
+
+            // Fixes #105 Allow user to define their beforeSend function.
+            // Fixes #181 IE8 incompatibility
+            xhrObject.request = $.extend(
+                true,
+                xhrObject.request,
+                groupRequest
+            );
+
+            // JSONP needs a unique jsonpCallback to run concurrently
+            if (xhrObject.request.dataType.toLowerCase() === 'jsonp' && !xhrObject.request.jsonpCallback) {
+                xhrObject.request.jsonpCallback = 'callback_' + xhrObject.extra.group;
+            }
+
+            return xhrObject;
+        },
+
+        handleRequests: function () {
+            var scope = this,
+                group,
+                requestsCount = this.requestGroups.length;
+
+            if (this.helper.executeCallback.call(this, this.options.callback.onSendRequest, [this.node, this.query]) === false) {
+                return;
+            }
+
+            for (var i = 0, ii = this.requestGroups.length; i < ii; ++i) {
+                group = this.requestGroups[i];
+                if (this.requests[group].isDuplicated) continue;
+
+                (function (group, xhrObject) {
+                    if (typeof scope.options.source[group].ajax === "function") {
+
+                        var _groupRequest = scope.options.source[group].ajax.call(scope, scope.query);
+
+                        // Fixes #271 Data is cached inside the xhrObject
+                        xhrObject = scope.extendXhrObject(
+                            scope.generateRequestObject(group),
+                            (typeof _groupRequest === "object") ? _groupRequest : {}
+                        );
+
+                        if (typeof xhrObject.request !== "object" || !xhrObject.request.url) {
+                            // {debug}
+                            if (scope.options.debug) {
+                                _debug.log({
+                                    'node': scope.selector,
+                                    'function': 'handleRequests',
+                                    'message': 'Source function must return an object containing ".url" key for group "' + group + '"'
+                                });
+                                _debug.print();
+                            }
+                            // {/debug}
+                            scope.populateSource([], group);
+                            return;
+                        }
+                        scope.requests[group] = xhrObject;
+                    }
+
+                    var _request,
+                        _isExtended = false, // Prevent the main request from being changed
+                        _data; // New data array in case it is modified inside callback.done
+
+                    if (~xhrObject.request.url.indexOf('{{query}}')) {
+                        if (!_isExtended) {
+                            xhrObject = $.extend(true, {}, xhrObject);
+                            _isExtended = true;
+                        }
+                        // #184 Invalid encoded characters on dynamic requests for `{{query}}`
+                        xhrObject.request.url = xhrObject.request.url.replace('{{query}}', encodeURIComponent(scope.query));
+                    }
+
+                    if (xhrObject.request.data) {
+                        for (var i in xhrObject.request.data) {
+                            if (!xhrObject.request.data.hasOwnProperty(i)) continue;
+                            if (~String(xhrObject.request.data[i]).indexOf('{{query}}')) {
+                                if (!_isExtended) {
+                                    xhrObject = $.extend(true, {}, xhrObject);
+                                    _isExtended = true;
+                                }
+                                // jQuery handles encodeURIComponent when the query is inside the data object
+                                xhrObject.request.data[i] = xhrObject.request.data[i].replace('{{query}}', scope.query);
+                                break;
+                            }
+                        }
+                    }
+
+                    $.ajax(xhrObject.request).done(function (data, textStatus, jqXHR) {
+                        _data = null;
+
+                        for (var i = 0, ii = xhrObject.validForGroup.length; i < ii; i++) {
+
+                            _request = scope.requests[xhrObject.validForGroup[i]];
+
+                            if (_request.callback.done instanceof Function) {
+                                _data = _request.callback.done.call(scope, data, textStatus, jqXHR);
+
+                                // {debug}
+                                if (!Array.isArray(_data) || typeof _data !== "object") {
+                                    if (scope.options.debug) {
+                                        _debug.log({
+                                            'node': scope.selector,
+                                            'function': 'Ajax.callback.done()',
+                                            'message': 'Invalid returned data has to be an Array'
+                                        });
+                                        _debug.print();
+                                    }
+                                }
+                                // {/debug}
+                            }
+                        }
+
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+
+                        for (var i = 0, ii = xhrObject.validForGroup.length; i < ii; i++) {
+                            _request = scope.requests[xhrObject.validForGroup[i]];
+                            _request.callback.fail instanceof Function && _request.callback.fail.call(scope, jqXHR, textStatus, errorThrown);
+                        }
+
+                        // {debug}
+                        if (scope.options.debug) {
+                            _debug.log({
+                                'node': scope.selector,
+                                'function': 'Ajax.callback.fail()',
+                                'arguments': JSON.stringify(xhrObject.request),
+                                'message': textStatus
+                            });
+
+                            console.log(errorThrown);
+
+                            _debug.print();
+                        }
+                        // {/debug}
+
+                    }).always(function (data, textStatus, jqXHR) {
+
+                        for (var i = 0, ii = xhrObject.validForGroup.length; i < ii; i++) {
+                            _request = scope.requests[xhrObject.validForGroup[i]];
+                            _request.callback.always instanceof Function && _request.callback.always.call(scope, data, textStatus, jqXHR);
+
+                            // #248, #303 Aborted requests would call populate with invalid data
+                            if (typeof jqXHR !== "object") return;
+
+                            // #265 Modified data from ajax.callback.done is not being registred (use of _data)
+                            scope.populateSource(
+                                typeof data.promise === "function" && [] || _data || data,
+                                _request.extra.group,
+                                _request.extra.path || _request.request.path
+                            );
+
+                            requestsCount -= 1;
+                            if (requestsCount === 0) {
+                                scope.helper.executeCallback.call(scope, scope.options.callback.onReceiveRequest, [scope.node, scope.query]);
+                            }
+
+                        }
+
+                    }).then(function (jqXHR, textStatus) {
+
+                        for (var i = 0, ii = xhrObject.validForGroup.length; i < ii; i++) {
+                            _request = scope.requests[xhrObject.validForGroup[i]];
+                            _request.callback.then instanceof Function && _request.callback.then.call(scope, jqXHR, textStatus);
+                        }
+
+                    });
+
+                }(group, this.requests[group]));
+
+            }
+
+        },
+
+        /**
+         * Build the source groups to be cycled for matched results
+         *
+         * @param {Array} data Array of Strings or Array of Objects
+         * @param {String} group
+         * @param {String} [path]
+         * @return {*}
+         */
+        populateSource: function (data, group, path) {
+            var scope = this,
+                groupSource = this.options.source[group],
+                extraData = groupSource.ajax && groupSource.data;
+
+            if (path && typeof path === "string") {
+                data = this.helper.namespace.call(this, path, data);
+            }
+
+            if (typeof data === 'undefined') {
+                // {debug}
+                if (this.options.debug) {
+                    _debug.log({
+                        'node': this.selector,
+                        'function': 'populateSource()',
+                        'arguments': path,
+                        'message': 'Invalid data path.'
+                    });
+
+                    _debug.print();
+                }
+                // {/debug}
+            }
+
+            if (!Array.isArray(data)) {
+                // {debug}
+                if (this.options.debug) {
+                    _debug.log({
+                        'node': this.selector,
+                        'function': 'populateSource()',
+                        'arguments': JSON.stringify({group: group}),
+                        'message': 'Invalid data type, must be Array type.'
+                    });
+                    _debug.print();
+                }
+                // {/debug}
+                data = [];
+            }
+
+            if (extraData) {
+                if (typeof extraData === "function") {
+                    extraData = extraData();
+                }
+
+                if (Array.isArray(extraData)) {
+                    data = data.concat(extraData);
+                }
+                // {debug}
+                else {
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'populateSource()',
+                            'arguments': JSON.stringify(extraData),
+                            'message': 'WARNING - this.options.source.' + group + '.data Must be an Array or a function that returns an Array.'
+                        });
+
+                        _debug.print();
+                    }
+                }
+                // {/debug}
+            }
+
+            var tmpObj,
+                display = groupSource.display ?
+                    (groupSource.display[0] === 'compiled' ? groupSource.display[1] : groupSource.display[0]) :
+                    (this.options.display[0] === 'compiled' ? this.options.display[1] : this.options.display[0]);
+
+            for (var i = 0, ii = data.length; i < ii; i++) {
+                if (data[i] === null || typeof data[i] === "boolean") {
+                    // {debug}
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'populateSource()',
+                            'message': 'WARNING - NULL/BOOLEAN value inside ' + group + '! The data was skipped.'
+                        });
+
+                        _debug.print();
+                    }
+                    // {/debug}
+                    continue;
+                }
+                if (typeof data[i] === "string") {
+                    tmpObj = {};
+                    tmpObj[display] = data[i];
+                    data[i] = tmpObj;
+                }
+                data[i].group = group;
+            }
+
+            if (!this.hasDynamicGroups && this.dropdownFilter.dynamic.length) {
+
+                var key,
+                    value,
+                    tmpValues = {};
+
+                for (var i = 0, ii = data.length; i < ii; i++) {
+                    for (var k = 0, kk = this.dropdownFilter.dynamic.length; k < kk; k++) {
+                        key = this.dropdownFilter.dynamic[k].key;
+
+                        value = data[i][key];
+                        if (!value) continue;
+                        if (!this.dropdownFilter.dynamic[k].value) {
+                            this.dropdownFilter.dynamic[k].value = [];
+                        }
+                        if (!tmpValues[key]) {
+                            tmpValues[key] = [];
+                        }
+                        if (!~tmpValues[key].indexOf(value.toLowerCase())) {
+                            tmpValues[key].push(value.toLowerCase());
+                            this.dropdownFilter.dynamic[k].value.push(value);
+                        }
+                    }
+                }
+            }
+
+            if (this.options.correlativeTemplate) {
+
+                var template = groupSource.template || this.options.template,
+        

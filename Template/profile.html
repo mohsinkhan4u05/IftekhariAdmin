@@ -1,0 +1,1816 @@
+pTemplate).append(_liHtml);
+            }
+
+            if (this.result.length && _unusedGroups.length) {
+                for (var i = 0, ii = _unusedGroups.length; i < ii; ++i) {
+                    groupTemplate.find('[data-group-template="' + _unusedGroups[i] + '"]').remove();
+                }
+            }
+
+            this.resultHtml = groupTemplate;
+
+        },
+
+        buildBackdropLayout: function () {
+
+            if (!this.options.backdrop) return;
+
+            if (!this.backdrop.container) {
+                this.backdrop.css = $.extend(
+                    {
+                        "opacity": 0.6,
+                        "filter": 'alpha(opacity=60)',
+                        "position": 'fixed',
+                        "top": 0,
+                        "right": 0,
+                        "bottom": 0,
+                        "left": 0,
+                        "z-index": 1040,
+                        "background-color": "#000"
+                    },
+                    this.options.backdrop
+                );
+
+                this.backdrop.container = $("<div/>", {
+                    "class": this.options.selector.backdrop,
+                    "css": this.backdrop.css
+                }).insertAfter(this.container);
+
+            }
+            this.container
+                .addClass('backdrop')
+                .css({
+                    "z-index": this.backdrop.css["z-index"] + 1,
+                    "position": "relative"
+                });
+
+        },
+
+        buildHintLayout: function (result) {
+            if (!this.options.hint) return;
+            // #144 hint doesn't overlap with the input when the query is too long
+            if (this.node[0].scrollWidth > Math.ceil(this.node.innerWidth())) {
+                this.hint.container && this.hint.container.val("");
+                return;
+            }
+
+            var scope = this,
+                hint = "",
+                result = result || this.result,
+                query = this.query.toLowerCase();
+
+            if (this.options.accent) {
+                query = this.helper.removeAccent.call(this, query);
+            }
+
+            this.hintIndex = null;
+
+            if (this.searchGroups.length) {
+
+                if (!this.hint.container) {
+
+                    this.hint.css = $.extend({
+                            "border-color": "transparent",
+                            "position": "absolute",
+                            "top": 0,
+                            "display": "inline",
+                            "z-index": -1,
+                            "float": "none",
+                            "color": "silver",
+                            "box-shadow": "none",
+                            "cursor": "default",
+                            "-webkit-user-select": "none",
+                            "-moz-user-select": "none",
+                            "-ms-user-select": "none",
+                            "user-select": "none"
+                        },
+                        this.options.hint
+                    );
+
+                    this.hint.container = $('<input/>', {
+                        'type': this.node.attr('type'),
+                        'class': this.node.attr('class'),
+                        'readonly': true,
+                        'unselectable': 'on',
+                        'aria-hidden': 'true',
+                        'tabindex': -1,
+                        'click': function () {
+                            // IE8 Fix
+                            scope.node.focus();
+                        }
+                    }).addClass(this.options.selector.hint)
+                        .css(this.hint.css)
+                        .insertAfter(this.node);
+
+                    this.node.parent().css({
+                        "position": "relative"
+                    });
+                }
+
+                this.hint.container.css('color', this.hint.css.color);
+
+                // Do not display hint for empty query
+                if (query) {
+                    var _displayKeys,
+                        _group,
+                        _comparedValue;
+
+                    for (var i = 0, ii = result.length; i < ii; i++) {
+
+                        _group = result[i].group;
+                        _displayKeys = this.options.source[_group].display || this.options.display;
+
+                        for (var k = 0, kk = _displayKeys.length; k < kk; k++) {
+
+                            _comparedValue = String(result[i][_displayKeys[k]]).toLowerCase();
+                            if (this.options.accent) {
+                                _comparedValue = this.helper.removeAccent.call(this, _comparedValue);
+                            }
+
+                            if (_comparedValue.indexOf(query) === 0) {
+                                hint = String(result[i][_displayKeys[k]]);
+                                this.hintIndex = i;
+                                break;
+                            }
+                        }
+                        if (this.hintIndex !== null) {
+                            break;
+                        }
+                    }
+                }
+
+                this.hint.container
+                    .val(hint.length > 0 && this.rawQuery + hint.substring(this.query.length) || "");
+
+            }
+
+        },
+
+        buildDropdownLayout: function () {
+
+            if (!this.options.dropdownFilter) return;
+
+            var scope = this;
+
+            $('<span/>', {
+                "class": this.options.selector.filter,
+                "html": function () {
+
+                    $(this).append(
+                        $('<button/>', {
+                            "type": "button",
+                            "class": scope.options.selector.filterButton,
+                            "style": "display: none;",
+                            "click": function (e) {
+                                e.stopPropagation();
+                                scope.container.toggleClass('filter');
+
+                                var _ns = scope.namespace + '-dropdown-filter';
+
+                                $('html').off(_ns);
+
+                                if (scope.container.hasClass('filter')) {
+                                    $('html').on("click" + _ns + " touchend" + _ns, function (e) {
+                                        if ($(e.target).closest('.' + scope.options.selector.filter)[0] || scope.hasDragged) return;
+                                        scope.container.removeClass('filter');
+                                    });
+                                }
+                            }
+                        })
+                    );
+
+                    $(this).append(
+                        $('<ul/>', {
+                            "class": scope.options.selector.dropdown
+                        })
+                    );
+                }
+            }).insertAfter(scope.container.find('.' + scope.options.selector.query));
+
+        },
+
+        buildDropdownItemLayout: function (type) {
+
+            if (!this.options.dropdownFilter) return;
+
+            var scope = this,
+                template,
+                all = typeof this.options.dropdownFilter === 'string' && this.options.dropdownFilter || 'All',
+                ulScope = this.container.find('.' + this.options.selector.dropdown),
+                filter;
+
+            // Use regular groups defined in options.source
+            if (type === 'static' && (this.options.dropdownFilter === true || typeof this.options.dropdownFilter === 'string')) {
+                this.dropdownFilter.static.push({
+                    key: 'group',
+                    template: '{{group}}',
+                    all: all,
+                    value: Object.keys(this.options.source)
+                });
+            }
+
+            for (var i = 0, ii = this.dropdownFilter[type].length; i < ii; i++) {
+
+                filter = this.dropdownFilter[type][i];
+
+                if (!Array.isArray(filter.value)) {
+                    filter.value = [filter.value];
+                }
+
+                if (filter.all) {
+                    this.dropdownFilterAll = filter.all;
+                }
+
+                for (var k = 0, kk = filter.value.length; k <= kk; k++) {
+
+                    // Only add "all" at the last filter iteration
+                    if (k === kk && (i !== ii - 1)) {
+                        continue;
+                    } else if (k === kk && (i === ii - 1)) {
+                        if (type === 'static' && this.dropdownFilter.dynamic.length) {
+                            continue;
+                        }
+                    }
+
+                    template = this.dropdownFilterAll || all;
+                    if (filter.value[k]) {
+                        if (filter.template) {
+                            template = filter.template.replace(new RegExp('\{\{' + filter.key + '}}', 'gi'), filter.value[k]);
+                        } else {
+                            template = filter.value[k];
+                        }
+                    } else {
+                        this.container.find('.' + scope.options.selector.filterButton).html(template);
+                    }
+
+                    (function (k, filter, template) {
+
+                        ulScope.append(
+                            $("<li/>", {
+                                "class": scope.options.selector.dropdownItem + ' ' + scope.helper.slugify.call(scope, filter.key + '-' + (filter.value[k] || all)),
+                                "html": $("<a/>", {
+                                    "href": "javascript:;",
+                                    "html": template,
+                                    "click": function (e) {
+                                        e.preventDefault();
+                                        _selectFilter.call(scope, {
+                                            key: filter.key,
+                                            value: filter.value[k] || '*',
+                                            template: template
+                                        });
+                                    }
+                                })
+                            })
+                        );
+
+                    }(k, filter, template));
+                }
+            }
+
+            if (this.dropdownFilter[type].length) {
+                this.container.find('.' + scope.options.selector.filterButton).removeAttr('style');
+            }
+
+            /**
+             * @private
+             * Select the filter and rebuild the result group
+             *
+             * @param {object} item
+             */
+            function _selectFilter(item) {
+                if (item.value === "*") {
+                    delete this.filters.dropdown;
+                } else {
+                    this.filters.dropdown = item;
+                }
+
+                this.container
+                    .removeClass('filter')
+                    .find('.' + this.options.selector.filterButton)
+                    .html(item.template);
+
+                this.isDropdownEvent = true;
+                this.node.trigger('search' + this.namespace);
+
+                this.node.focus();
+            }
+        },
+
+        dynamicFilter: {
+            isEnabled: false,
+            init: function () {
+
+                if (!this.options.dynamicFilter) return;
+
+                this.dynamicFilter.bind.call(this);
+                this.dynamicFilter.isEnabled = true;
+
+            },
+
+            validate: function (item) {
+
+                var isValid,
+                    softValid = null,
+                    hardValid = null,
+                    itemValue;
+
+                for (var key in this.filters.dynamic) {
+                    if (!this.filters.dynamic.hasOwnProperty(key)) continue;
+                    if (!!~key.indexOf('.')) {
+                        itemValue = this.helper.namespace.call(this, key, item, 'get');
+                    } else {
+                        itemValue = item[key];
+                    }
+
+                    if (this.filters.dynamic[key].modifier === '|' && !softValid) {
+                        softValid = itemValue == this.filters.dynamic[key].value || false;
+                    }
+
+                    if (this.filters.dynamic[key].modifier === '&') {
+                        // Leaving "==" in case of comparing number with string
+                        if (itemValue == this.filters.dynamic[key].value) {
+                            hardValid = true;
+                        } else {
+                            hardValid = false;
+                            break;
+                        }
+                    }
+                }
+
+                isValid = softValid;
+                if (hardValid !== null) {
+                    isValid = hardValid;
+                    if (hardValid === true && softValid !== null) {
+                        isValid = softValid;
+                    }
+                }
+
+                return !!isValid;
+
+            },
+
+            set: function (key, value) {
+
+                var matches = key.match(/^([|&])?(.+)/);
+
+                if (!value) {
+                    delete this.filters.dynamic[matches[2]];
+                } else {
+                    this.filters.dynamic[matches[2]] = {
+                        modifier: matches[1] || '|',
+                        value: value
+                    };
+                }
+
+                if (this.dynamicFilter.isEnabled) {
+                    this.generateSource();
+                }
+
+            },
+            bind: function () {
+
+                var scope = this,
+                    filter;
+
+                for (var i = 0, ii = this.options.dynamicFilter.length; i < ii; i++) {
+
+                    filter = this.options.dynamicFilter[i];
+
+                    if (typeof filter.selector === "string") {
+                        filter.selector = $(filter.selector);
+                    }
+
+                    if (!(filter.selector instanceof $) || !filter.selector[0] || !filter.key) {
+                        // {debug}
+                        if (this.options.debug) {
+                            _debug.log({
+                                'node': this.selector,
+                                'function': 'buildDynamicLayout()',
+                                'message': 'Invalid jQuery selector or jQuery Object for "filter.selector" or missing filter.key'
+                            });
+
+                            _debug.print();
+                        }
+                        // {/debug}
+                        continue;
+                    }
+
+                    (function (filter) {
+                        filter.selector.off(scope.namespace).on('change' + scope.namespace, function () {
+                            scope.dynamicFilter.set.apply(scope, [filter.key, scope.dynamicFilter.getValue(this)]);
+                        }).trigger('change' + scope.namespace);
+                    }(filter));
+
+                }
+            },
+
+            getValue: function (tag) {
+                var value;
+                if (tag.tagName === "SELECT") {
+                    value = tag.value;
+                } else if (tag.tagName === "INPUT") {
+                    if (tag.type === "checkbox") {
+                        value = tag.checked && tag.getAttribute('value') || tag.checked || null;
+                    } else if (tag.type === "radio" && tag.checked) {
+                        value = tag.value;
+                    }
+                }
+                return value;
+            }
+        },
+
+        showLayout: function () {
+
+            // Means the container is already visible
+            if (this.container.hasClass('result')) return;
+
+            // Do not add display classes if there are no results
+            if (!this.result.length && !this.options.emptyTemplate && !this.options.backdropOnFocus) {
+                return;
+            }
+
+            _addHtmlListeners.call(this);
+
+            this.container.addClass([
+                this.result.length || (this.searchGroups.length && this.options.emptyTemplate && this.query.length) ? 'result ' : '',
+                this.options.hint && this.searchGroups.length ? 'hint' : '',
+                this.options.backdrop || this.options.backdropOnFocus ? 'backdrop' : ''].join(' ')
+            );
+
+            this.helper.executeCallback.call(this, this.options.callback.onShowLayout, [this.node, this.query]);
+
+            function _addHtmlListeners() {
+                var scope = this;
+
+                // If Typeahead is blured by pressing the "Tab" Key, hide the results
+                $('html').off("keydown" + this.namespace)
+                    .on("keydown" + this.namespace, function (e) {
+                        if (!e.keyCode || e.keyCode !== 9) return;
+                        setTimeout(function () {
+                            if (!$(':focus').closest(scope.container).find(scope.node)[0]) {
+                                scope.hideLayout();
+                            }
+                        }, 0);
+                    });
+
+                // If Typeahead is blured by clicking outside, hide the results
+                $('html').off("click" + this.namespace + " touchend" + this.namespace)
+                    .on("click" + this.namespace + " touchend" + this.namespace, function (e) {
+                        if ($(e.target).closest(scope.container)[0] || scope.hasDragged) return;
+                        scope.hideLayout();
+                    });
+            }
+        },
+
+        hideLayout: function () {
+
+            // Means the container is already hidden
+            if (!this.container.hasClass('result') && !this.container.hasClass('backdrop')) return;
+
+            this.container.removeClass('result hint filter' + (this.options.backdropOnFocus && $(this.node).is(':focus') ? '' : ' backdrop'));
+
+            if (this.options.backdropOnFocus && this.container.hasClass('backdrop')) return;
+
+            // Make sure the event HTML gets cleared
+            $('html').off(this.namespace);
+
+            this.helper.executeCallback.call(this, this.options.callback.onHideLayout, [this.node, this.query]);
+
+        },
+
+        resetLayout: function () {
+
+            this.result = {};
+            this.groups = [];
+            this.resultCount = 0;
+            this.resultCountPerGroup = {};
+            this.resultItemCount = 0;
+            this.resultHtml = null;
+
+            if (this.options.hint && this.hint.container) {
+                this.hint.container.val('');
+            }
+
+        },
+
+        resetInput: function () {
+
+            this.node.val('');
+            this.item = null;
+            this.query = '';
+            this.rawQuery = '';
+
+        },
+
+        buildCancelButtonLayout: function () {
+            if (!this.options.cancelButton) return;
+            var scope = this;
+
+            $('<span/>', {
+                "class": this.options.selector.cancelButton,
+                "mousedown": function (e) {
+                    // Don't blur the input
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+
+                    scope.resetInput();
+                    scope.node.trigger('input' + scope.namespace, [e]);
+                }
+            }).insertBefore(this.node);
+
+        },
+
+        toggleCancelButtonVisibility: function () {
+            this.container.toggleClass('cancel', !!this.query.length);
+        },
+
+        __construct: function () {
+            this.extendOptions();
+
+            if (!this.unifySourceFormat()) {
+                return;
+            }
+
+            this.dynamicFilter.init.apply(this);
+
+            this.init();
+            this.buildDropdownLayout();
+            this.buildDropdownItemLayout('static');
+
+            this.delegateEvents();
+            this.buildCancelButtonLayout();
+
+            this.helper.executeCallback.call(this, this.options.callback.onReady, [this.node]);
+        },
+
+        helper: {
+
+            isEmpty: function (obj) {
+                for (var prop in obj) {
+                    if (obj.hasOwnProperty(prop))
+                        return false;
+                }
+
+                return true;
+            },
+
+            /**
+             * Remove every accent(s) from a string
+             *
+             * @param {String} string
+             * @returns {*}
+             */
+            removeAccent: function (string) {
+                if (typeof string !== "string") {
+                    return;
+                }
+
+                var accent = _accent;
+
+                if (typeof this.options.accent === "object") {
+                    accent = this.options.accent;
+                }
+
+                string = string.toLowerCase().replace(new RegExp('[' + accent.from + ']', 'g'), function (match) {
+                    return accent.to[accent.from.indexOf(match)];
+                });
+
+                return string;
+            },
+
+            /**
+             * Creates a valid url from string
+             *
+             * @param {String} string
+             * @returns {string}
+             */
+            slugify: function (string) {
+
+                string = String(string);
+
+                if (string !== "") {
+                    string = this.helper.removeAccent.call(this, string);
+                    string = string.replace(/[^-a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+                }
+
+                return string;
+            },
+
+            /**
+             * Sort list of object by key
+             *
+             * @param {String|Array} field
+             * @param {Boolean} reverse
+             * @param {Function} primer
+             * @returns {Function}
+             */
+            sort: function (field, reverse, primer) {
+                var key = function (x) {
+                    for (var i = 0, ii = field.length; i < ii; i++) {
+                        if (typeof x[field[i]] !== 'undefined') {
+                            return primer(x[field[i]]);
+                        }
+                    }
+                    return x;
+                };
+
+                reverse = [-1, 1][+!!reverse];
+
+                return function (a, b) {
+                    return a = key(a), b = key(b), reverse * ((a > b) - (b > a));
+                };
+            },
+
+            /**
+             * Replace a string from-to index
+             *
+             * @param {String} string The complete string to replace into
+             * @param {Number} offset The cursor position to start replacing from
+             * @param {Number} length The length of the replacing string
+             * @param {String} replace The replacing string
+             * @returns {String}
+             */
+            replaceAt: function (string, offset, length, replace) {
+                return string.substring(0, offset) + replace + string.substring(offset + length);
+            },
+
+            /**
+             * Adds <strong> html around a matched string
+             *
+             * @param {String} string The complete string to match from
+             * @param {String} key
+             * @param {Boolean} [accents]
+             * @returns {*}
+             */
+            highlight: function (string, keys, accents) {
+
+                string = String(string);
+
+                var searchString = accents && this.helper.removeAccent.call(this, string) || string,
+                    matches = [];
+
+                if (!Array.isArray(keys)) {
+                    keys = [keys];
+                }
+
+                keys.sort(function (a, b) {
+                    return b.length - a.length;
+                });
+
+                // Make sure the '|' join will be safe!
+                for (var i = keys.length - 1; i >= 0; i--) {
+                    if (keys[i].trim() === "") {
+                        keys.splice(i, 1);
+                        continue;
+                    }
+                    keys[i] = keys[i].replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+                }
+
+                searchString.replace(
+                    new RegExp('(?:' + keys.join('|') + ')(?!([^<]+)?>)', 'gi'),
+                    function (match, index, offset) {
+                        matches.push({
+                            offset: offset,
+                            length: match.length
+                        });
+                    }
+                );
+
+                for (var i = matches.length - 1; i >= 0; i--) {
+                    string = this.helper.replaceAt(
+                        string,
+                        matches[i].offset,
+                        matches[i].length,
+                        "<strong>" + string.substr(matches[i].offset, matches[i].length) + "</strong>"
+                    );
+                }
+
+                return string;
+            },
+
+            /**
+             * Get carret position, mainly used for right arrow navigation
+             * @param element
+             * @returns {*}
+             */
+            getCaret: function (element) {
+                if (element.selectionStart) {
+                    return element.selectionStart;
+                } else if (document.selection) {
+                    element.focus();
+
+                    var r = document.selection.createRange();
+                    if (r === null) {
+                        return 0;
+                    }
+
+                    var re = element.createTextRange(),
+                        rc = re.duplicate();
+                    re.moveToBookmark(r.getBookmark());
+                    rc.setEndPoint('EndToStart', re);
+
+                    return rc.text.length;
+                }
+                return 0;
+            },
+
+            /**
+             * Clean strings from possible XSS (script and iframe tags)
+             * @param string
+             * @returns {string}
+             */
+            cleanStringFromScript: function (string) {
+                return typeof string === "string" &&
+                    string.replace(/<\/?(?:script|iframe)\b[^>]*>/gm, '') ||
+                    string;
+            },
+
+            /**
+             * Executes an anonymous function or a string reached from the window scope.
+             *
+             * @example
+             * Note: These examples works with every configuration callbacks
+             *
+             * // An anonymous function inside the "onInit" option
+             * onInit: function() { console.log(':D'); };
+             *
+             * // myFunction() located on window.coucou scope
+             * onInit: 'window.coucou.myFunction'
+             *
+             * // myFunction(a,b) located on window.coucou scope passing 2 parameters
+             * onInit: ['window.coucou.myFunction', [':D', ':)']];
+             *
+             * // Anonymous function to execute a local function
+             * onInit: function () { myFunction(':D'); }
+             *
+             * @param {String|Array} callback The function to be called
+             * @param {Array} [extraParams] In some cases the function can be called with Extra parameters (onError)
+             * @returns {*}
+             */
+            executeCallback: function (callback, extraParams) {
+
+                if (!callback) {
+                    return;
+                }
+
+                var _callback;
+
+                if (typeof callback === "function") {
+
+                    _callback = callback;
+
+                } else if (typeof callback === "string" || Array.isArray(callback)) {
+
+                    if (typeof callback === "string") {
+                        callback = [callback, []];
+                    }
+
+                    _callback = this.helper.namespace.call(this, callback[0], window);
+
+                    if (typeof _callback !== "function") {
+                        // {debug}
+                        if (this.options.debug) {
+                            _debug.log({
+                                'node': this.selector,
+                                'function': 'executeCallback()',
+                                'arguments': JSON.stringify(callback),
+                                'message': 'WARNING - Invalid callback function"'
+                            });
+
+                            _debug.print();
+                        }
+                        // {/debug}
+                        return;
+                    }
+
+                }
+
+                return _callback.apply(this, (callback[1] || []).concat(extraParams ? extraParams : []));
+
+            },
+
+            namespace: function (string, object, method, defaultValue) {
+
+                if (typeof string !== "string" || string === "") {
+                    // {debug}
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.options.input || this.selector,
+                            'function': 'helper.namespace()',
+                            'arguments': string,
+                            'message': 'ERROR - Missing string"'
+                        });
+
+                        _debug.print();
+                    }
+                    // {/debug}
+                    return false;
+                }
+
+                var value = typeof defaultValue !== "undefined" ? defaultValue : undefined;
+
+                // Exit before looping if the string doesn't contain an object reference
+                if (!~string.indexOf('.')) {
+                    return object[string] || value;
+                }
+
+                var parts = string.split('.'),
+                    parent = object || window,
+                    method = method || 'get',
+                    currentPart = '';
+
+                for (var i = 0, length = parts.length; i < length; i++) {
+                    currentPart = parts[i];
+
+                    if (typeof parent[currentPart] === "undefined") {
+                        if (~['get', 'delete'].indexOf(method)) {
+                            return typeof defaultValue !== "undefined" ? defaultValue : undefined;
+                        }
+                        parent[currentPart] = {};
+                    }
+
+                    if (~['set', 'create', 'delete'].indexOf(method)) {
+                        if (i === length - 1) {
+                            if (method === 'set' || method === 'create') {
+                                parent[currentPart] = value;
+                            } else {
+
+                                delete parent[currentPart];
+                                return true;
+                            }
+                        }
+                    }
+
+                    parent = parent[currentPart];
+
+                }
+                return parent;
+            },
+
+            typeWatch: (function () {
+                var timer = 0;
+                return function (callback, ms) {
+                    clearTimeout(timer);
+                    timer = setTimeout(callback, ms);
+                };
+            })()
+
+        }
+    };
+
+    /**
+     * @public
+     * Implement Typeahead on the selected input node.
+     *
+     * @param {Object} options
+     * @return {Object} Modified DOM element
+     */
+    $.fn.typeahead = $.typeahead = function (options) {
+        return _api.typeahead(this, options);
+    };
+
+    /**
+     * @private
+     * API to handles Typeahead methods via jQuery.
+     */
+    var _api = {
+
+        /**
+         * Enable Typeahead
+         *
+         * @param {Object} node
+         * @param {Object} options
+         * @returns {*}
+         */
+        typeahead: function (node, options) {
+
+            if (!options || !options.source || typeof options.source !== 'object') {
+
+                // {debug}
+                _debug.log({
+                    'node': node.selector || options && options.input,
+                    'function': '$.typeahead()',
+                    'arguments': JSON.stringify(options && options.source || ''),
+                    'message': 'Undefined "options" or "options.source" or invalid source type - Typeahead dropped'
+                });
+
+                _debug.print();
+                // {/debug}
+
+                return;
+            }
+
+            if (typeof node === "function") {
+                if (!options.input) {
+
+                    // {debug}
+                    _debug.log({
+                        'node': node.selector,
+                        'function': '$.typeahead()',
+                        //'arguments': JSON.stringify(options),
+                        'message': 'Undefined "options.input" - Typeahead dropped'
+                    });
+
+                    _debug.print();
+                    // {/debug}
+
+                    return;
+                }
+
+                node = $(options.input);
+            }
+
+            if (!node.length || node[0].nodeName !== "INPUT") {
+
+                // {debug}
+                _debug.log({
+                    'node': node.selector,
+                    'function': '$.typeahead()',
+                    'arguments': JSON.stringify(options.input),
+                    'message': 'Unable to find jQuery input element - Typeahead dropped'
+                });
+
+                _debug.print();
+                // {/debug}
+
+                return;
+            }
+
+            // #270 Forcing node.selector, the property was deleted from jQuery3
+            // In case of multiple init, each of the instances needs it's own selector!
+            if (node.length === 1) {
+                node[0].selector = node.selector || options.input || node[0].nodeName.toLowerCase();
+
+                /*jshint boss:true */
+                return window.Typeahead[node[0].selector] = new Typeahead(node, options);
+            } else {
+
+                var instances = {},
+                    instanceName;
+
+                for (var i = 0, ii = node.length; i < ii; ++i) {
+                    instanceName = node[i].nodeName.toLowerCase();
+                    if (typeof instances[instanceName] !== "undefined") {
+                        instanceName += i;
+                    }
+                    node[i].selector = instanceName;
+
+                    window.Typeahead[instanceName] = instances[instanceName] = new Typeahead(node.eq(i), options);
+                }
+
+                return instances;
+            }
+        }
+    };
+
+// {debug}
+    var _debug = {
+
+        table: {},
+        log: function (debugObject) {
+
+            if (!debugObject.message || typeof debugObject.message !== "string") {
+                return;
+            }
+
+            this.table[debugObject.message] = $.extend({
+                'node': '',
+                'function': '',
+                'arguments': ''
+            }, debugObject);
+
+        },
+        print: function () {
+
+            if (Typeahead.prototype.helper.isEmpty(this.table) || !console || !console.table) {
+                return;
+            }
+
+            if (console.group !== undefined || console.table !== undefined) {
+                console.groupCollapsed('--- jQuery Typeahead Debug ---');
+                console.table(this.table);
+                console.groupEnd();
+            }
+
+            this.table = {};
+
+        }
+
+    };
+    _debug.log({
+        'message': 'WARNING - You are using the DEBUG version. Use /dist/jquery.typeahead.min.js in production.'
+    });
+
+    _debug.print();
+// {/debug}
+
+// IE8 Shims
+    window.console = window.console || {
+            log: function () {
+            }
+        };
+
+    if (!Array.isArray) {
+        Array.isArray = function (arg) {
+            return Object.prototype.toString.call(arg) === '[object Array]';
+        };
+    }
+
+    if (!('trim' in String.prototype)) {
+        String.prototype.trim = function () {
+            return this.replace(/^\s+/, '').replace(/\s+$/, '');
+        };
+    }
+    if (!('indexOf' in Array.prototype)) {
+        Array.prototype.indexOf = function (find, i /*opt*/) {
+            if (i === undefined) i = 0;
+            if (i < 0) i += this.length;
+            if (i < 0) i = 0;
+            for (var n = this.length; i < n; i++)
+                if (i in this && this[i] === find)
+                    return i;
+            return -1;
+        };
+    }
+    if (!Object.keys) {
+        Object.keys = function (obj) {
+            var keys = [],
+                k;
+            for (k in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, k)) {
+                    keys.push(k);
+                }
+            }
+            return keys;
+        };
+    }
+
+    return Typeahead;
+
+}));
+                                                                                                                                                                                                                                                                                                                                                                                                                                     /**
+ * Owl Carousel v2.2.1
+ * Copyright 2013-2017 David Deutsch
+ * Licensed under  ()
+ */
+/**
+ * Owl carousel
+ * @version 2.1.6
+ * @author Bartosz Wojciechowski
+ * @author David Deutsch
+ * @license The MIT License (MIT)
+ * @todo Lazy Load Icon
+ * @todo prevent animationend bubling
+ * @todo itemsScaleUp
+ * @todo Test Zepto
+ * @todo stagePadding calculate wrong active classes
+ */
+;(function($, window, document, undefined) {
+
+	/**
+	 * Creates a carousel.
+	 * @class The Owl Carousel.
+	 * @public
+	 * @param {HTMLElement|jQuery} element - The element to create the carousel for.
+	 * @param {Object} [options] - The options
+	 */
+	function Owl(element, options) {
+
+		/**
+		 * Current settings for the carousel.
+		 * @public
+		 */
+		this.settings = null;
+
+		/**
+		 * Current options set by the caller including defaults.
+		 * @public
+		 */
+		this.options = $.extend({}, Owl.Defaults, options);
+
+		/**
+		 * Plugin element.
+		 * @public
+		 */
+		this.$element = $(element);
+
+		/**
+		 * Proxied event handlers.
+		 * @protected
+		 */
+		this._handlers = {};
+
+		/**
+		 * References to the running plugins of this carousel.
+		 * @protected
+		 */
+		this._plugins = {};
+
+		/**
+		 * Currently suppressed events to prevent them from beeing retriggered.
+		 * @protected
+		 */
+		this._supress = {};
+
+		/**
+		 * Absolute current position.
+		 * @protected
+		 */
+		this._current = null;
+
+		/**
+		 * Animation speed in milliseconds.
+		 * @protected
+		 */
+		this._speed = null;
+
+		/**
+		 * Coordinates of all items in pixel.
+		 * @todo The name of this member is missleading.
+		 * @protected
+		 */
+		this._coordinates = [];
+
+		/**
+		 * Current breakpoint.
+		 * @todo Real media queries would be nice.
+		 * @protected
+		 */
+		this._breakpoint = null;
+
+		/**
+		 * Current width of the plugin element.
+		 */
+		this._width = null;
+
+		/**
+		 * All real items.
+		 * @protected
+		 */
+		this._items = [];
+
+		/**
+		 * All cloned items.
+		 * @protected
+		 */
+		this._clones = [];
+
+		/**
+		 * Merge values of all items.
+		 * @todo Maybe this could be part of a plugin.
+		 * @protected
+		 */
+		this._mergers = [];
+
+		/**
+		 * Widths of all items.
+		 */
+		this._widths = [];
+
+		/**
+		 * Invalidated parts within the update process.
+		 * @protected
+		 */
+		this._invalidated = {};
+
+		/**
+		 * Ordered list of workers for the update process.
+		 * @protected
+		 */
+		this._pipe = [];
+
+		/**
+		 * Current state information for the drag operation.
+		 * @todo #261
+		 * @protected
+		 */
+		this._drag = {
+			time: null,
+			target: null,
+			pointer: null,
+			stage: {
+				start: null,
+				current: null
+			},
+			direction: null
+		};
+
+		/**
+		 * Current state information and their tags.
+		 * @type {Object}
+		 * @protected
+		 */
+		this._states = {
+			current: {},
+			tags: {
+				'initializing': [ 'busy' ],
+				'animating': [ 'busy' ],
+				'dragging': [ 'interacting' ]
+			}
+		};
+
+		$.each([ 'onResize', 'onThrottledResize' ], $.proxy(function(i, handler) {
+			this._handlers[handler] = $.proxy(this[handler], this);
+		}, this));
+
+		$.each(Owl.Plugins, $.proxy(function(key, plugin) {
+			this._plugins[key.charAt(0).toLowerCase() + key.slice(1)]
+				= new plugin(this);
+		}, this));
+
+		$.each(Owl.Workers, $.proxy(function(priority, worker) {
+			this._pipe.push({
+				'filter': worker.filter,
+				'run': $.proxy(worker.run, this)
+			});
+		}, this));
+
+		this.setup();
+		this.initialize();
+	}
+
+	/**
+	 * Default options for the carousel.
+	 * @public
+	 */
+	Owl.Defaults = {
+		items: 3,
+		loop: false,
+		center: false,
+		rewind: false,
+
+		mouseDrag: true,
+		touchDrag: true,
+		pullDrag: true,
+		freeDrag: false,
+
+		margin: 0,
+		stagePadding: 0,
+
+		merge: false,
+		mergeFit: true,
+		autoWidth: false,
+
+		startPosition: 0,
+		rtl: false,
+
+		smartSpeed: 250,
+		fluidSpeed: false,
+		dragEndSpeed: false,
+
+		responsive: {},
+		responsiveRefreshRate: 200,
+		responsiveBaseElement: window,
+
+		fallbackEasing: 'swing',
+
+		info: false,
+
+		nestedItemSelector: false,
+		itemElement: 'div',
+		stageElement: 'div',
+
+		refreshClass: 'owl-refresh',
+		loadedClass: 'owl-loaded',
+		loadingClass: 'owl-loading',
+		rtlClass: 'owl-rtl',
+		responsiveClass: 'owl-responsive',
+		dragClass: 'owl-drag',
+		itemClass: 'owl-item',
+		stageClass: 'owl-stage',
+		stageOuterClass: 'owl-stage-outer',
+		grabClass: 'owl-grab'
+	};
+
+	/**
+	 * Enumeration for width.
+	 * @public
+	 * @readonly
+	 * @enum {String}
+	 */
+	Owl.Width = {
+		Default: 'default',
+		Inner: 'inner',
+		Outer: 'outer'
+	};
+
+	/**
+	 * Enumeration for types.
+	 * @public
+	 * @readonly
+	 * @enum {String}
+	 */
+	Owl.Type = {
+		Event: 'event',
+		State: 'state'
+	};
+
+	/**
+	 * Contains all registered plugins.
+	 * @public
+	 */
+	Owl.Plugins = {};
+
+	/**
+	 * List of workers involved in the update process.
+	 */
+	Owl.Workers = [ {
+		filter: [ 'width', 'settings' ],
+		run: function() {
+			this._width = this.$element.width();
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function(cache) {
+			cache.current = this._items && this._items[this.relative(this._current)];
+		}
+	}, {
+		filter: [ 'items', 'settings' ],
+		run: function() {
+			this.$stage.children('.cloned').remove();
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function(cache) {
+			var margin = this.settings.margin || '',
+				grid = !this.settings.autoWidth,
+				rtl = this.settings.rtl,
+				css = {
+					'width': 'auto',
+					'margin-left': rtl ? margin : '',
+					'margin-right': rtl ? '' : margin
+				};
+
+			!grid && this.$stage.children().css(css);
+
+			cache.css = css;
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function(cache) {
+			var width = (this.width() / this.settings.items).toFixed(3) - this.settings.margin,
+				merge = null,
+				iterator = this._items.length,
+				grid = !this.settings.autoWidth,
+				widths = [];
+
+			cache.items = {
+				merge: false,
+				width: width
+			};
+
+			while (iterator--) {
+				merge = this._mergers[iterator];
+				merge = this.settings.mergeFit && Math.min(merge, this.settings.items) || merge;
+
+				cache.items.merge = merge > 1 || cache.items.merge;
+
+				widths[iterator] = !grid ? this._items[iterator].width() : width * merge;
+			}
+
+			this._widths = widths;
+		}
+	}, {
+		filter: [ 'items', 'settings' ],
+		run: function() {
+			var clones = [],
+				items = this._items,
+				settings = this.settings,
+				// TODO: Should be computed from number of min width items in stage
+				view = Math.max(settings.items * 2, 4),
+				size = Math.ceil(items.length / 2) * 2,
+				repeat = settings.loop && items.length ? settings.rewind ? view : Math.max(view, size) : 0,
+				append = '',
+				prepend = '';
+
+			repeat /= 2;
+
+			while (repeat--) {
+				// Switch to only using appended clones
+				clones.push(this.normalize(clones.length / 2, true));
+				append = append + items[clones[clones.length - 1]][0].outerHTML;
+				clones.push(this.normalize(items.length - 1 - (clones.length - 1) / 2, true));
+				prepend = items[clones[clones.length - 1]][0].outerHTML + prepend;
+			}
+
+			this._clones = clones;
+
+			$(append).addClass('cloned').appendTo(this.$stage);
+			$(prepend).addClass('cloned').prependTo(this.$stage);
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function() {
+			var rtl = this.settings.rtl ? 1 : -1,
+				size = this._clones.length + this._items.length,
+				iterator = -1,
+				previous = 0,
+				current = 0,
+				coordinates = [];
+
+			while (++iterator < size) {
+				previous = coordinates[iterator - 1] || 0;
+				current = this._widths[this.relative(iterator)] + this.settings.margin;
+				coordinates.push(previous + current * rtl);
+			}
+
+			this._coordinates = coordinates;
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function() {
+			var padding = this.settings.stagePadding,
+				coordinates = this._coordinates,
+				css = {
+					'width': Math.ceil(Math.abs(coordinates[coordinates.length - 1])) + padding * 2,
+					'padding-left': padding || '',
+					'padding-right': padding || ''
+				};
+
+			this.$stage.css(css);
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function(cache) {
+			var iterator = this._coordinates.length,
+				grid = !this.settings.autoWidth,
+				items = this.$stage.children();
+
+			if (grid && cache.items.merge) {
+				while (iterator--) {
+					cache.css.width = this._widths[this.relative(iterator)];
+					items.eq(iterator).css(cache.css);
+				}
+			} else if (grid) {
+				cache.css.width = cache.items.width;
+				items.css(cache.css);
+			}
+		}
+	}, {
+		filter: [ 'items' ],
+		run: function() {
+			this._coordinates.length < 1 && this.$stage.removeAttr('style');
+		}
+	}, {
+		filter: [ 'width', 'items', 'settings' ],
+		run: function(cache) {
+			cache.current = cache.current ? this.$stage.children().index(cache.current) : 0;
+			cache.current = Math.max(this.minimum(), Math.min(this.maximum(), cache.current));
+			this.reset(cache.current);
+		}
+	}, {
+		filter: [ 'position' ],
+		run: function() {
+			this.animate(this.coordinates(this._current));
+		}
+	}, {
+		filter: [ 'width', 'position', 'items', 'settings' ],
+		run: function() {
+			var rtl = this.settings.rtl ? 1 : -1,
+				padding = this.settings.stagePadding * 2,
+				begin = this.coordinates(this.current()) + padding,
+				end = begin + this.width() * rtl,
+				inner, outer, matches = [], i, n;
+
+			for (i = 0, n = this._coordinates.length; i < n; i++) {
+				inner = this._coordinates[i - 1] || 0;
+				outer = Math.abs(this._coordinates[i]) + padding * rtl;
+
+				if ((this.op(inner, '<=', begin) && (this.op(inner, '>', end)))
+					|| (this.op(outer, '<', begin) && this.op(outer, '>', end))) {
+					matches.push(i);
+				}
+			}
+
+			this.$stage.children('.active').removeClass('active');
+			this.$stage.children(':eq(' + matches.join('), :eq(') + ')').addClass('active');
+
+			if (this.settings.center) {
+				this.$stage.children('.center').removeClass('center');
+				this.$stage.children().eq(this.current()).addClass('center');
+			}
+		}
+	} ];
+
+	/**
+	 * Initializes the carousel.
+	 * @protected
+	 */
+	Owl.prototype.initialize = function() {
+		this.enter('initializing');
+		this.trigger('initialize');
+
+		this.$element.toggleClass(this.settings.rtlClass, this.settings.rtl);
+
+		if (this.settings.autoWidth && !this.is('pre-loading')) {
+			var imgs, nestedSelector, width;
+			imgs = this.$element.find('img');
+			nestedSelector = this.settings.nestedItemSelector ? '.' + this.settings.nestedItemSelector : undefined;
+			width = this.$element.children(nestedSelector).width();
+
+			if (imgs.length && width <= 0) {
+				this.preloadAutoWidthImages(imgs);
+			}
+		}
+
+		this.$element.addClass(this.options.loadingClass);
+
+		// create stage
+		this.$stage = $('<' + this.settings.stageElement + ' class="' + this.settings.stageClass + '"/>')
+			.wrap('<div class="' + this.settings.stageOuterClass + '"/>');
+
+		// append stage
+		this.$element.append(this.$stage.parent());
+
+		// append content
+		this.replace(this.$element.children().not(this.$stage.parent()));
+
+		// check visibility
+		if (this.$element.is(':visible')) {
+			// update view
+			this.refresh();
+		} else {
+			// invalidate width
+			this.invalidate('width');
+		}
+
+		this.$element
+			.removeClass(this.options.loadingClass)
+			.addClass(this.options.loadedClass);
+
+		// register event handlers
+		this.registerEventHandlers();
+
+		this.leave('initializing');
+		this.trigger('initialized');
+	};
+
+	/**
+	 * Setups the current settings.
+	 * @todo Remove responsive classes. Why should adaptive designs be brought into IE8?
+	 * @todo Support for media queries by using `matchMedia` would be nice.
+	 * @public
+	 */
+	Owl.prototype.setup = function() {
+		var viewport = this.viewport(),
+			overwrites = this.options.responsive,
+			match = -1,
+			settings = null;
+
+		if (!overwrites) {
+			settings = $.extend({}, this.options);
+		} else {
+			$.each(overwrites, function(breakpoint) {
+				if (breakpoint <= viewport && breakpoint > match) {
+					match = Number(breakpoint);
+				}
+			});
+
+			settings = $.extend({}, this.options, overwrites[match]);
+			if (typeof settings.stagePadding === 'function') {
+				settings.stagePadding = settings.stagePadding();
+			}
+			delete settings.responsive;
+
+			// responsive class
+			if (settings.responsiveClass) {
+				this.$element.attr('class',
+					this.$element.attr('class').replace(new RegExp('(' + this.options.responsiveClass + '-)\\S+\\s', 'g'), '$1' + match)
+				);
+			}
+		}
+
+		this.trigger('change', { property: { name: 'settings', value: settings } });
+		this._breakpoint = match;
+		this.settings = settings;
+		this.invalidate('settings');
+		this.trigger('changed', { property: { name: 'settings', value: this.settings } });
+	};
+
+	/**
+	 * Updates option logic if necessery.
+	 * @protected
+	 */
+	Owl.prototype.optionsLogic = function() {
+		if (this.settings.autoWidth) {
+			this.settings.stagePadding = false;
+			this.settings.merge = false;
+		}
+	};
+
+	/**
+	 * Prepares an item before add.
+	 * @todo Rename event parameter `content` to `item`.
+	 * @protected
+	 * @returns {jQuery|HTMLElement} - The item container.
+	 */
+	Owl.prototype.prepare = function(item) {
+		var event = this.trigger('prepare', { content: item });
+
+		if (!event.data) {
+			event.data = $('<' + this.settings.itemElement + '/>')
+				.addClass(this.options.itemClass).append(item)
+		}
+
+		this.trigger('prepared', { content: event.data });
+
+		return event.data;
+	};
+
+	/**
+	 * Updates the view.
+	 * @public
+	 */
+	Owl.prototype.update = function() {
+		var i = 0,
+			n = this._pipe.length,
+			filter = $.proxy(function(p) { return this[p] }, this._invalidated),
+			cache = {};
+
+		while (i < n) {
+			if (this._invalidated.all || $.grep(this._pipe[i].filter, filter).length > 0) {
+				this._pipe[i].run(cache);
+			}
+			i++;
+		}
+
+		this._invalidated = {};
+
+		!this.is('valid') && this.enter('valid');
+	};
+
+	/**
+	 * Gets the width of the view.
+	 * @public
+	 * @param {Owl.Width} [dimension=Owl.Width.Default] - The dimension to return.
+	 * @returns {Number} - The width of the view in pixel.
+	 */
+	Owl.prototype.width = function(dimension) {
+		dimension = dimension || Owl.Width.Default;
+		switch (dimension) {
+			case Owl.Width.Inner:
+			case Owl.Width.Outer:
+				return this._width;
+			default:
+				return this._width - this.settings.stagePadding * 2 + this.settings.margin;
+		}
+	};
+
+	/**
+	 * Refreshes the carousel primarily for adaptive purposes.
+	 * @public
+	 */
+	Owl.prototype.refresh = function() {
+		this.enter('refreshing');
+		this.trigger('refresh');
+
+		this.setup();
+
+		this.optionsLogic();
+
+		this.$element.addClass(this.options.refreshClass);
+
+		this.update();
+
+		this.$element.removeClass(this.options.refreshClass);
+
+		this.leave('refreshing');
+		this.trigger('refreshed');
+	};
+
+	/**
+	 * Checks window `resize` event.
+	 * @protected
+	 */
+	Owl.prototype.onThrottledResize = function() {
+		window.clearTimeout(this.resizeTimer);
+		this.resizeTimer = window.setTimeout(this._handlers.onResize, this.settings.responsiveRefreshRate);
+	};
+
+	/**
+	 * Checks window `resize` event.
+	 * @protected
+	 */
+	Owl.prototype.onResize = function() {
+		if (!this._items.length) {
+			return false;
+		}
+
+		if (this._width === this.$element.width()) {
+			return false;
+		}
+
+		if (!this.$element.is(':visible')) {
+			return false;
+		}
+
+		this.enter('resizing');
+
+		if (this.trigger('resize').isDefaultPrevented()) {
+			this.leave('resizing');
+			return false;
+		}
+
+		this.invalidate('width');
+
+		this.refresh();
+
+		this.leave('resizing');
+		this.trigger('resized');
+	};
+
+	/**
+	 * Registers event handlers.
+	 * @todo Check `msPointerEnabled`
+	 * @todo #261
+	 * @protected
+	 */
+	Owl.prototype.registerEventHandlers = function() {
+		if ($.support.transition) {
+			this.$stage.on($.support.transition.end + '.owl.core', $.proxy(this.onTransitionEnd, this));
+		}
+
+		if (this.settings.responsive !== false) {
+			this.on(window, 'resize', this._handlers.onThrottledResize);
+		}
+
+		if (this.settings.mouseDrag) {
+			this.$element.addClass(this.options.dragClass);
+			this.$stage.on('mousedown.owl.core', $.proxy(this.onDragStart, this));
+			this.$stage.on('dragstart.owl.core selectstart.owl.core', function() { return false });
+		}
+
+		if (this.settings.touchDrag){
+			this.$stage.on('touchstart.owl.core', $.proxy(this.onDragStart, this));
+			this.$stage.on('touchcancel.owl.core', $.proxy(this.onDragEnd, this));
+		}
+	};
+
+	/**
+	 * Handles `touchstart` and `mousedown` events.
+	 * @todo Horizontal swipe threshold as option
+	 * @todo #261
+	 * @protected
+	 * @param {Event} event - The event arguments.
+	 */
+	Owl.prototype.onDragStart = function(event) {
+		var stage = null;
+
+		if (event.which === 3) {
+			return;
+		}
+
+		if ($.support.transform) {
+			stage = this.$stage.css('transform').replace(/.*\(|\)| /g, '').split(',');
+			stage = {
+				x: stage[stage.length === 16 ? 12 : 4],
+				y: stage[stage.length === 16 ? 13 : 5]
+			};
+		} else {
+			stage = this.$stage.position();
+			stage = {
+				x: this.settings.rtl ?
+					stage.left + this.$stage.width() - this.width() + this.settings.margin :
+					stage.left,
+				y: stage.top
+			};
+		}
+
+		if (this.is('animating')) {
+			$.support.transform ? this.animate(stage.x) : this.$stage.stop()
+			this.invalidate('position');
+		}
+
+		this.$element.toggleClass(this.options.grabClass, event.type === 'mousedown');
+
+		this.speed(0);
+
+		this._drag.time = new Date().getTime();
+		this._drag.target = $(event.target);
+		this._drag.stage.start = stage;
+		this._drag.stage.current = stage;
+		this._drag.pointer = this.pointer(event);
+
+		$(document).on('mouseup.owl.core touchend.owl.core', $.proxy(this.onDragEnd, this));
+
+		$(document).one('mousemove.owl.core touchmove.owl.core', $.proxy(function(event) {
+			var delta = this.difference(this._drag.pointer, this.pointer(event));
+
+			$(document).on('mousemove.owl.core touchmove.owl.core', $.proxy(this.onDragMove, this));
+
+			if (Math.abs(delta.x) < Math.abs(delta.y) && this.is('valid')) {
+				return;
+			}
+
+			event.preventDefault();
+
+			this.enter('dragging');
+			this.trigger('drag');
+		}, this));
+	};
+
+	/**
+	 * Handles the `touchmove` and `mousemove` events.
+	 * @todo #261
+	 * @protected
+	 

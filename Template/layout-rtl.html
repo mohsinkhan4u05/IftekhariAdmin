@@ -1,0 +1,1193 @@
+
+	equal( counter, 54, "direct event bindings with data" );
+
+	// Delegated events only
+	counter = 0;
+	jQuery( "#onandoff" )
+		.on( "click", "em", 5, function( e, trig ) {
+			counter += e.data + (trig || 9);	// twice, 5+9+5+17=36
+		})
+		.one( "click", "em", 7, function( e, trig ) {
+			counter += e.data + (trig || 11);	// once, 7+11=18
+		})
+		.find("em")
+			.trigger("click")
+			.trigger( "click", 17 )
+		.end()
+		.off( "click", "em" );
+	equal( counter, 54, "delegated event bindings with data" );
+
+
+	// Mixed event bindings and types
+	counter = 0;
+	mixfn = function(e, trig) {
+		counter += (e.data || 0) + (trig || 1);
+	};
+	jQuery( "#onandoff" )
+		.on( " click  clack cluck ", "em", 2, mixfn )
+		.on( "cluck", "b", 7, mixfn )
+		.on( "cluck", mixfn )
+		.trigger( "what!" )
+		.each( function() {
+			equal( counter, 0, "nothing triggered yet" );
+		})
+		.find( "em" )
+			.one( "cluck", 3, mixfn )
+			.trigger( "cluck", 8 )			// 3+8 2+8 + 0+8 = 29
+			.off()
+			.trigger( "cluck", 9 )			// 2+9 + 0+9 = 20
+		.end()
+		.each( function() {
+			equal( counter, 49, "after triggering em element" );
+		})
+		.off( "cluck", function(){} )		// shouldn't remove anything
+		.trigger( "cluck", 2 )				// 0+2 = 2
+		.each( function() {
+			equal( counter, 51, "after triggering #onandoff cluck" );
+		})
+		.find( "b" )
+			.on( "click", 95, mixfn )
+			.on( "clack", "p", 97, mixfn )
+			.one( "cluck", 3, mixfn )
+			.trigger( "quack", 19 )			// 0
+			.off( "click clack cluck" )
+		.end()
+		.each( function() {
+			equal( counter, 51, "after triggering b" );
+		})
+		.trigger( "cluck", 3 )				// 0+3 = 3
+		.off( "clack", "em", mixfn )
+		.find( "em" )
+			.trigger( "clack" )				// 0
+		.end()
+		.each( function() {
+			equal( counter, 54, "final triggers" );
+		})
+		.off( "click cluck" );
+
+	// We should have removed all the event handlers ... kinda hacky way to check this
+	data = jQuery.data[ jQuery( "#onandoff" )[0].expando ] || {};
+	equal( data["events"], undefined, "no events left" );
+
+	$onandoff.remove();
+});
+
+test("special on name mapping", function() {
+	expect( 7 );
+
+	jQuery.event.special["slap"] = {
+		bindType: "click",
+		delegateType: "swing",
+		handle: function( event ) {
+			equal( event.handleObj.origType, "slap", "slapped your mammy, " + event.type );
+		}
+	};
+
+	var comeback = function( event ) {
+		ok( true, "event " + event.type + " triggered" );
+	};
+
+	jQuery("<div><button id=\"mammy\">Are We Not Men?</button></div>")
+		.on( "slap", "button", jQuery.noop )
+		.on( "swing", "button", comeback )
+		.find( "button" )
+			.on( "slap", jQuery.noop )
+			.on( "click", comeback )
+			.trigger( "click" )		// bindType-slap and click
+			.off( "slap" )
+			.trigger( "click" )		// click
+			.off( "click" )
+			.trigger( "swing" )		// delegateType-slap and swing
+		.end()
+		.off( "slap swing", "button" )
+		.find( "button" )			// everything should be gone
+			.trigger( "slap" )
+			.trigger( "click" )
+			.trigger( "swing" )
+		.end()
+		.remove();
+	delete jQuery.event.special["slap"];
+
+	jQuery.event.special["gutfeeling"] = {
+		bindType: "click",
+		delegateType: "click",
+		handle: function( event ) {
+			equal( event.handleObj.origType, "gutfeeling", "got a gutfeeling" );
+			// Need to call the handler since .one() uses it to unbind
+			return event.handleObj.handler.call( this , event );
+		}
+	};
+
+	// Ensure a special event isn't removed by its mapped type
+	jQuery( "<p>Gut Feeling</p>" )
+		.on( "click", jQuery.noop )
+		.on( "gutfeeling", jQuery.noop )
+		.off( "click" )
+		.trigger( "gutfeeling" )
+		.remove();
+
+	// Ensure special events are removed when only a namespace is provided
+	jQuery( "<p>Gut Feeling</p>" )
+		.on( "gutfeeling.Devo", jQuery.noop )
+		.off( ".Devo" )
+		.trigger( "gutfeeling" )
+		.remove();
+
+	// Ensure .one() events are removed after their maiden voyage
+	jQuery( "<p>Gut Feeling</p>" )
+		.one( "gutfeeling", jQuery.noop )
+		.trigger( "gutfeeling" )	// This one should
+		.trigger( "gutfeeling" )	// This one should not
+		.remove();
+
+	delete jQuery.event.special["gutfeeling"];
+});
+
+test(".on and .off, selective mixed removal (#10705)", function() {
+	expect(7);
+
+	var timingx = function( e ) {
+		ok( true, "triggered " + e.type );
+	};
+
+	jQuery( "<p>Strange Pursuit</p>" )
+		.on( "click", timingx )
+		.on( "click.duty", timingx )
+		.on( "click.now", timingx )
+		.on( "devo", timingx )
+		.on( "future", timingx )
+		.trigger( "click" )		// 3
+		.trigger( "devo" )		// 1
+		.off( ".duty devo " )	// trailing space
+		.trigger( "future" )	// 1
+		.trigger( "click" )		// 2
+		.off( "future click" )
+		.trigger( "click" );	// 0
+});
+
+test(".on( event-map, null-selector, data ) #11130", function() {
+
+	expect( 1 );
+
+	var $p = jQuery("<p>Strange Pursuit</p>"),
+		data = "bar",
+		map = {
+			"foo": function( event ) {
+				equal( event.data, "bar", "event.data correctly relayed with null selector" );
+				$p.remove();
+			}
+		};
+
+	$p.on( map, null, data ).trigger("foo");
+});
+
+test("clone() delegated events (#11076)", function() {
+	expect(3);
+
+	var counter = { "center": 0, "fold": 0, "centerfold": 0 },
+		clicked = function() {
+			counter[ jQuery(this).text().replace(/\s+/, "") ]++;
+		},
+		table =
+			jQuery( "<table><tr><td>center</td><td>fold</td></tr></table>" )
+			.on( "click", "tr", clicked )
+			.on( "click", "td:first-child", clicked )
+			.on( "click", "td:last-child", clicked ),
+		clone = table.clone( true );
+
+	clone.find("td").trigger("click");
+	equal( counter["center"], 1, "first child" );
+	equal( counter["fold"], 1, "last child" );
+	equal( counter["centerfold"], 2, "all children" );
+
+	table.remove();
+	clone.remove();
+});
+
+test("checkbox state (#3827)", function() {
+	expect( 9 );
+
+	var markup = jQuery("<div><input type=checkbox><div>").appendTo("#qunit-fixture"),
+		cb = markup.find("input")[0];
+
+	jQuery(cb).on( "click", function(){
+		equal( this.checked, false, "just-clicked checkbox is not checked" );
+	});
+	markup.on( "click", function(){
+		equal( cb.checked, false, "checkbox is not checked in bubbled event" );
+	});
+
+	// Native click
+	cb.checked = true;
+	equal( cb.checked, true, "native - checkbox is initially checked" );
+	cb.click();
+	equal( cb.checked, false, "native - checkbox is no longer checked" );
+
+	// jQuery click
+	cb.checked = true;
+	equal( cb.checked, true, "jQuery - checkbox is initially checked" );
+	jQuery( cb ).trigger("click");
+	equal( cb.checked, false, "jQuery - checkbox is no longer checked" );
+
+	// Handlers only; checkbox state remains false
+	jQuery( cb ).triggerHandler( "click" );
+});
+
+test("focus-blur order (#12868)", function() {
+	expect( 5 );
+
+	var order,
+		$text = jQuery("#text1"),
+		$radio = jQuery("#radio1").trigger("focus");
+
+	// IE6-10 fire focus/blur events asynchronously; this is the resulting mess.
+	// IE's browser window must be topmost for this to work properly!!
+	stop();
+	$radio[0].focus();
+
+	setTimeout( function() {
+
+		$text
+			.on( "focus", function(){
+				equal( order++, 1, "text focus" );
+			})
+			.on( "blur", function(){
+				equal( order++, 0, "text blur" );
+			});
+		$radio
+			.on( "focus", function(){
+				equal( order++, 1, "radio focus" );
+			})
+			.on( "blur", function(){
+				equal( order++, 0, "radio blur" );
+			});
+
+		// Enabled input getting focus
+		order = 0;
+		equal( document.activeElement, $radio[0], "radio has focus" );
+		$text.trigger("focus");
+		setTimeout( function() {
+			equal( document.activeElement, $text[0], "text has focus" );
+
+			// Run handlers without native method on an input
+			order = 1;
+			$radio.triggerHandler( "focus" );
+			start();
+		}, 50 );
+	}, 50 );
+});
+
+test("hover event no longer special since 1.9", function() {
+	expect( 1 );
+
+	jQuery("<div>craft</div>")
+		.on( "hover", function( e ) {
+			equal( e.type, "hover", "I am hovering!" );
+		})
+		.trigger("hover")
+		.off("hover");
+});
+
+test("fixHooks extensions", function() {
+	expect( 2 );
+
+	// IE requires focusable elements to be visible, so append to body
+	var $fixture = jQuery( "<input type='text' id='hook-fixture' />" ).appendTo( "body" ),
+		saved = jQuery.event.fixHooks.click;
+
+	// Ensure the property doesn't exist
+	$fixture.on( "click", function( event ) {
+		ok( !("blurrinessLevel" in event), "event.blurrinessLevel does not exist" );
+	});
+	fireNative( $fixture[0], "click" );
+	$fixture.off( "click" );
+
+	jQuery.event.fixHooks.click = {
+		filter: function( event ) {
+			event.blurrinessLevel = 42;
+			return event;
+		}
+	};
+
+	// Trigger a native click and ensure the property is set
+	$fixture.on( "click", function( event ) {
+		equal( event.blurrinessLevel, 42, "event.blurrinessLevel was set" );
+	});
+	fireNative( $fixture[0], "click" );
+
+	delete jQuery.event.fixHooks.click;
+	$fixture.off( "click" ).remove();
+	jQuery.event.fixHooks.click = saved;
+});
+
+testIframeWithCallback( "jQuery.ready promise", "event/promiseReady.html", function( isOk ) {
+	expect(1);
+	ok( isOk, "$.when( $.ready ) works" );
+});
+
+testIframeWithCallback( "Focusing iframe element", "event/focusElem.html", function( isOk ) {
+	expect(1);
+	ok( isOk, "Focused an element in an iframe" );
+});
+
+// need PHP here to make the incepted IFRAME hang
+if ( hasPHP ) {
+	testIframeWithCallback( "jQuery.ready synchronous load with long loading subresources", "event/syncReady.html", function( isOk ) {
+		expect(1);
+		ok( isOk, "jQuery loaded synchronously fires ready when the DOM can truly be interacted with" );
+	});
+}
+
+(function(){
+	// This code must be run before DOM ready!
+	var notYetReady, noEarlyExecution,
+		order = [],
+		args = {};
+
+	notYetReady = !jQuery.isReady;
+
+	test("jQuery.isReady", function() {
+		expect(2);
+
+		equal(notYetReady, true, "jQuery.isReady should not be true before DOM ready");
+		equal(jQuery.isReady, true, "jQuery.isReady should be true once DOM is ready");
+	});
+
+	// Create an event handler.
+	function makeHandler( testId ) {
+		// When returned function is executed, push testId onto `order` array
+		// to ensure execution order. Also, store event handler arg to ensure
+		// the correct arg is being passed into the event handler.
+		return function( arg ) {
+			order.push(testId);
+			args[testId] = arg;
+		};
+	}
+
+	// Bind to the ready event in every possible way.
+	jQuery(makeHandler("a"));
+	jQuery(document).ready(makeHandler("b"));
+	jQuery(document).on("ready.readytest", makeHandler("c"));
+
+	// Do it twice, just to be sure.
+	jQuery(makeHandler("d"));
+	jQuery(document).ready(makeHandler("e"));
+	jQuery(document).on("ready.readytest", makeHandler("f"));
+
+	noEarlyExecution = order.length === 0;
+
+	// This assumes that QUnit tests are run on DOM ready!
+	test("jQuery ready", function() {
+		expect(10);
+
+		ok(noEarlyExecution, "Handlers bound to DOM ready should not execute before DOM ready");
+
+		// Ensure execution order.
+		deepEqual(order, ["a", "b", "d", "e", "c", "f"], "Bound DOM ready handlers should execute in on-order, but those bound with jQuery(document).on( 'ready', fn ) will always execute last");
+
+		// Ensure handler argument is correct.
+		equal(args["a"], jQuery, "Argument passed to fn in jQuery( fn ) should be jQuery");
+		equal(args["b"], jQuery, "Argument passed to fn in jQuery(document).ready( fn ) should be jQuery");
+		ok(args["c"] instanceof jQuery.Event, "Argument passed to fn in jQuery(document).on( 'ready', fn ) should be an event object");
+
+		order = [];
+
+		// Now that the ready event has fired, again bind to the ready event
+		// in every possible way. These event handlers should execute immediately.
+		jQuery(makeHandler("g"));
+		equal(order.pop(), "g", "Event handler should execute immediately");
+		equal(args["g"], jQuery, "Argument passed to fn in jQuery( fn ) should be jQuery");
+
+		jQuery(document).ready(makeHandler("h"));
+		equal(order.pop(), "h", "Event handler should execute immediately");
+		equal(args["h"], jQuery, "Argument passed to fn in jQuery(document).ready( fn ) should be jQuery");
+
+		jQuery(document).on("ready.readytest", makeHandler("never"));
+		equal(order.length, 0, "Event handler should never execute since DOM ready has already passed");
+
+		// Cleanup.
+		jQuery(document).off("ready.readytest");
+	});
+
+})();
+
+test("change handler should be detached from element", function() {
+	expect( 2 );
+
+	var $fixture = jQuery( "<input type='text' id='change-ie-leak' />" ).appendTo( "body" ),
+		originRemoveEvent = jQuery.removeEvent,
+		wrapperRemoveEvent =  function(elem, type, handle){
+			equal("change", type, "Event handler for 'change' event should be removed");
+			equal("change-ie-leak", jQuery(elem).attr("id"), "Event handler for 'change' event should be removed from appropriate element");
+			originRemoveEvent(elem, type, handle);
+		};
+
+	jQuery.removeEvent = wrapperRemoveEvent ;
+
+	$fixture.on( "change", function() {});
+	$fixture.off( "change" );
+
+	$fixture.remove();
+
+	jQuery.removeEvent = originRemoveEvent;
+});
+
+asyncTest("trigger click on checkbox, fires change event", function() {
+	expect(1);
+
+	var check = jQuery("#check2");
+
+	check.on( "change", function() {
+		// get it?
+		check.off("change");
+		ok( true, "Change event fired as a result of triggered click" );
+		start();
+	}).trigger("click");
+});
+
+test( "Namespace preserved when passed an Event (#12739)", function() {
+	expect( 4 );
+
+	var markup = jQuery(
+			"<div id='parent'><div id='child'></div></div>"
+		),
+		triggered = 0,
+		fooEvent;
+
+	markup.find("div")
+		.addBack()
+		.on( "foo.bar", function( e ) {
+			if ( !e.handled ) {
+				triggered++;
+				e.handled = true;
+				equal( e.namespace, "bar", "namespace is bar" );
+				jQuery( e.target ).find("div").each(function() {
+				  jQuery( this ).triggerHandler( e );
+				});
+			}
+		})
+		.on( "foo.bar2", function() {
+			ok( false, "foo.bar2 called on trigger " + triggered + " id " + this.id );
+		});
+
+	markup.trigger("foo.bar");
+	markup.trigger( jQuery.Event("foo.bar") );
+	fooEvent = jQuery.Event("foo");
+	fooEvent.namespace = "bar";
+	markup.trigger( fooEvent );
+	markup.remove();
+
+	equal( triggered, 3, "foo.bar triggered" );
+});
+
+test( "make sure events cloned correctly", 18, function() {
+	var clone,
+		fixture = jQuery("#qunit-fixture"),
+		checkbox = jQuery("#check1"),
+		p = jQuery("#firstp");
+
+	fixture.on( "click change", function( event, result ) {
+		ok( result,  event.type + " on original element is fired" );
+
+	}).on( "click", "#firstp", function( event, result ) {
+		ok( result, "Click on original child element though delegation is fired" );
+
+	}).on( "change", "#check1", function( event, result ) {
+		ok( result, "Change on original child element though delegation is fired" );
+	});
+
+	p.on("click", function() {
+		ok( true, "Click on original child element is fired" );
+	});
+
+	checkbox.on("change", function() {
+		ok( true, "Change on original child element is fired" );
+	});
+
+	fixture.clone().trigger("click").trigger("change"); // 0 events should be fired
+
+	clone = fixture.clone( true );
+
+	clone.find("p").eq(0).trigger( "click", true ); // 3 events should fire
+	clone.find("#check1").trigger( "change", true ); // 3 events should fire
+	clone.remove();
+
+	clone = fixture.clone( true, true );
+	clone.find("p").eq(0).trigger( "click", true ); // 3 events should fire
+	clone.find("#check1").trigger( "change", true ); // 3 events should fire
+
+	fixture.off();
+	p.off();
+	checkbox.off();
+
+	p.trigger("click"); // 0 should be fired
+	checkbox.trigger("change"); // 0 should be fired
+
+	clone.find("p").eq(0).trigger( "click", true );  // 3 events should fire
+	clone.find("#check1").trigger( "change", true ); // 3 events should fire
+	clone.remove();
+
+	clone.find("p").eq(0).trigger("click");  // 0 should be fired
+	clone.find("#check1").trigger("change"); // 0 events should fire
+});
+
+test( "Check order of focusin/focusout events", 2, function() {
+	var focus, blur,
+		input = jQuery("#name");
+
+	input.on("focus", function() {
+		focus = true;
+
+	}).on("focusin", function() {
+		ok( !focus, "Focusin event should fire before focus does" );
+
+	}).on("blur", function() {
+		blur = true;
+
+	}).on("focusout", function() {
+		ok( !blur, "Focusout event should fire before blur does" );
+	});
+
+	// gain focus
+	input.trigger("focus");
+
+	// then lose it
+	jQuery("#search").trigger("focus");
+
+	// cleanup
+	input.off();
+});
+
+test( "String.prototype.namespace does not cause trigger() to throw (#13360)", function() {
+	expect( 1 );
+	var errored = false;
+
+	String.prototype.namespace = function() {};
+
+	try {
+		jQuery("<p>").trigger("foo.bar");
+	} catch( e ) {
+		errored = true;
+	}
+	equal( errored, false, "trigger() did not throw exception" );
+	delete String.prototype.namespace;
+});
+                                                    module( "manipulation", {
+	teardown: moduleTeardown
+});
+
+// Ensure that an extended Array prototype doesn't break jQuery
+Array.prototype.arrayProtoFn = function() {
+	throw("arrayProtoFn should not be called");
+};
+
+function manipulationBareObj( value ) {
+	return value;
+}
+
+function manipulationFunctionReturningObj( value ) {
+	return function() {
+		return value;
+	};
+}
+
+/*
+	======== local reference =======
+	manipulationBareObj and manipulationFunctionReturningObj can be used to test passing functions to setters
+	See testVal below for an example
+
+	bareObj( value );
+		This function returns whatever value is passed in
+
+	functionReturningObj( value );
+		Returns a function that returns the value
+*/
+
+test( "text()", function() {
+
+	expect( 5 );
+
+	var expected, frag, $newLineTest;
+
+	expected = "This link has class=\"blog\": Simon Willison's Weblog";
+	equal( jQuery("#sap").text(), expected, "Check for merged text of more then one element." );
+
+	// Check serialization of text values
+	equal( jQuery(document.createTextNode("foo")).text(), "foo", "Text node was retrieved from .text()." );
+	notEqual( jQuery(document).text(), "", "Retrieving text for the document retrieves all text (#10724)." );
+
+	// Retrieve from document fragments #10864
+	frag = document.createDocumentFragment();
+	frag.appendChild( document.createTextNode("foo") );
+
+	equal( jQuery(frag).text(), "foo", "Document Fragment Text node was retrieved from .text()." );
+
+	$newLineTest = jQuery("<div>test<br/>testy</div>").appendTo("#moretests");
+	$newLineTest.find("br").replaceWith("\n");
+	equal( $newLineTest.text(), "test\ntesty", "text() does not remove new lines (#11153)" );
+
+	$newLineTest.remove();
+});
+
+test( "text(undefined)", function() {
+
+	expect( 1 );
+
+	equal( jQuery("#foo").text("<div").text(undefined)[ 0 ].innerHTML, "&lt;div", ".text(undefined) is chainable (#5571)" );
+});
+
+function testText( valueObj ) {
+
+	expect( 4 );
+
+	var val, j;
+
+	val = valueObj("<div><b>Hello</b> cruel world!</div>");
+	equal( jQuery("#foo").text(val)[ 0 ].innerHTML.replace(/>/g, "&gt;"), "&lt;div&gt;&lt;b&gt;Hello&lt;/b&gt; cruel world!&lt;/div&gt;", "Check escaped text" );
+
+	// using contents will get comments regular, text, and comment nodes
+	j = jQuery("#nonnodes").contents();
+	j.text( valueObj("hi!") );
+	equal( jQuery( j[ 0 ] ).text(), "hi!", "Check node,textnode,comment with text()" );
+	equal( j[ 1 ].nodeValue, " there ", "Check node,textnode,comment with text()" );
+
+	// Blackberry 4.6 doesn't maintain comments in the DOM
+	equal( jQuery("#nonnodes")[ 0 ].childNodes.length < 3 ? 8 : j[ 2 ].nodeType, 8, "Check node,textnode,comment with text()" );
+}
+
+test( "text(String)", function() {
+	testText( manipulationBareObj );
+});
+
+test( "text(Function)", function() {
+	testText( manipulationFunctionReturningObj );
+});
+
+test( "text(Function) with incoming value", function() {
+
+	expect( 2 );
+
+	var old = "This link has class=\"blog\": Simon Willison's Weblog";
+
+	jQuery("#sap").text(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return "foobar";
+	});
+
+	equal( jQuery("#sap").text(), "foobar", "Check for merged text of more then one element." );
+});
+
+function testAppendForObject( valueObj, isFragment ) {
+	var $base,
+		type = isFragment ? " (DocumentFragment)" : " (Element)",
+		text = "This link has class=\"blog\": Simon Willison's Weblog",
+		el = document.getElementById("sap").cloneNode( true ),
+		first = document.getElementById("first"),
+		yahoo = document.getElementById("yahoo");
+
+	if ( isFragment ) {
+		$base = document.createDocumentFragment();
+		jQuery( el ).contents().each(function() {
+			$base.appendChild( this );
+		});
+		$base = jQuery( $base );
+	} else {
+		$base = jQuery( el );
+	}
+
+	equal( $base.clone().append( valueObj(first.cloneNode(true)) ).text(),
+		text + "Try them out:",
+		"Check for appending of element" + type
+	);
+
+	equal( $base.clone().append( valueObj([ first.cloneNode(true), yahoo.cloneNode(true) ]) ).text(),
+		text + "Try them out:Yahoo",
+		"Check for appending of array of elements" + type
+	);
+
+	equal( $base.clone().append( valueObj(jQuery("#yahoo, #first").clone()) ).text(),
+		text + "YahooTry them out:",
+		"Check for appending of jQuery object" + type
+	);
+
+	equal( $base.clone().append( valueObj( 5 ) ).text(),
+		text + "5",
+		"Check for appending a number" + type
+	);
+
+	equal( $base.clone().append( valueObj([ jQuery("#first").clone(), jQuery("#yahoo, #google").clone() ]) ).text(),
+		text + "Try them out:GoogleYahoo",
+		"Check for appending of array of jQuery objects"
+	);
+
+	equal( $base.clone().append( valueObj(" text with spaces ") ).text(),
+		text + " text with spaces ",
+		"Check for appending text with spaces" + type
+	);
+
+	equal( $base.clone().append( valueObj([]) ).text(),
+		text,
+		"Check for appending an empty array" + type
+	);
+
+	equal( $base.clone().append( valueObj("") ).text(),
+		text,
+		"Check for appending an empty string" + type
+	);
+
+	equal( $base.clone().append( valueObj(document.getElementsByTagName("foo")) ).text(),
+		text,
+		"Check for appending an empty nodelist" + type
+	);
+
+	equal( $base.clone().append( "<span></span>", "<span></span>", "<span></span>" ).children().length,
+		$base.children().length + 3,
+		"Make sure that multiple arguments works." + type
+	);
+
+	equal( $base.clone().append( valueObj(document.getElementById("form").cloneNode(true)) ).children("form").length,
+		1,
+		"Check for appending a form (#910)" + type
+	);
+}
+
+function testAppend( valueObj ) {
+
+	expect( 78 );
+
+	testAppendForObject( valueObj, false );
+	testAppendForObject( valueObj, true );
+
+	var defaultText, result, message, iframe, iframeDoc, j, d,
+		$input, $radioChecked, $radioUnchecked, $radioParent, $map, $table;
+
+	defaultText = "Try them out:";
+	result = jQuery("#first").append( valueObj("<b>buga</b>") );
+
+	equal( result.text(), defaultText + "buga", "Check if text appending works" );
+	equal( jQuery("#select3").append( valueObj("<option value='appendTest'>Append Test</option>") ).find("option:last-child").attr("value"), "appendTest", "Appending html options to select element" );
+
+	jQuery("form").append( valueObj("<input name='radiotest' type='radio' checked='checked' />") );
+	jQuery("form input[name=radiotest]").each(function() {
+		ok( jQuery(this).is(":checked"), "Append checked radio" );
+	}).remove();
+
+	jQuery("form").append( valueObj("<input name='radiotest2' type='radio' checked    =   'checked' />") );
+	jQuery("form input[name=radiotest2]").each(function() {
+		ok( jQuery(this).is(":checked"), "Append alternately formated checked radio" );
+	}).remove();
+
+	jQuery("form").append( valueObj("<input name='radiotest3' type='radio' checked />") );
+	jQuery("form input[name=radiotest3]").each(function() {
+		ok( jQuery(this).is(":checked"), "Append HTML5-formated checked radio" );
+	}).remove();
+
+	jQuery("form").append( valueObj("<input type='radio' checked='checked' name='radiotest4' />") );
+	jQuery("form input[name=radiotest4]").each(function() {
+		ok( jQuery(this).is(":checked"), "Append with name attribute after checked attribute" );
+	}).remove();
+
+	message = "Test for appending a DOM node to the contents of an iframe";
+	iframe = jQuery("#iframe")[ 0 ];
+	iframeDoc = iframe.contentDocument || iframe.contentWindow && iframe.contentWindow.document;
+
+	try {
+		if ( iframeDoc && iframeDoc.body ) {
+			equal( jQuery(iframeDoc.body).append( valueObj("<div id='success'>test</div>") )[ 0 ].lastChild.id, "success", message );
+		} else {
+			ok( true, message + " - can't test" );
+		}
+	} catch( e ) {
+		strictEqual( e.message || e, undefined, message );
+	}
+
+	jQuery("<fieldset/>").appendTo("#form").append( valueObj("<legend id='legend'>test</legend>") );
+	t( "Append legend", "#legend", [ "legend" ] );
+
+	$map = jQuery("<map/>").append( valueObj("<area id='map01' shape='rect' coords='50,50,150,150' href='http://www.jquery.com/' alt='jQuery'>") );
+
+	equal( $map[ 0 ].childNodes.length, 1, "The area was inserted." );
+	equal( $map[ 0 ].firstChild.nodeName.toLowerCase(), "area", "The area was inserted." );
+
+	jQuery("#select1").append( valueObj("<OPTION>Test</OPTION>") );
+	equal( jQuery("#select1 option:last-child").text(), "Test", "Appending OPTION (all caps)" );
+
+	jQuery("#select1").append( valueObj("<optgroup label='optgroup'><option>optgroup</option></optgroup>") );
+	equal( jQuery("#select1 optgroup").attr("label"), "optgroup", "Label attribute in newly inserted optgroup is correct" );
+	equal( jQuery("#select1 option").last().text(), "optgroup", "Appending optgroup" );
+
+	$table = jQuery("#table").empty();
+
+	jQuery.each( "thead tbody tfoot colgroup caption tr th td".split(" "), function( i, name ) {
+		$table.append( valueObj( "<" + name + "/>" ) );
+		ok( $table.find( name ).length >= 1, "Append " + name );
+		ok( jQuery.parseHTML( "<" + name + "/>" ).length, name + " wrapped correctly" );
+	});
+
+	jQuery("#table colgroup").append( valueObj("<col/>") );
+	equal( jQuery("#table colgroup col").length, 1, "Append col" );
+
+	jQuery("#form")
+		.append( valueObj("<select id='appendSelect1'></select>") )
+		.append( valueObj("<select id='appendSelect2'><option>Test</option></select>") );
+	t( "Append Select", "#appendSelect1, #appendSelect2", [ "appendSelect1", "appendSelect2" ] );
+
+	equal( "Two nodes", jQuery("<div />").append( "Two", " nodes" ).text(), "Appending two text nodes (#4011)" );
+	equal( jQuery("<div />").append( "1", "", 3 ).text(), "13", "If median is false-like value, subsequent arguments should not be ignored" );
+
+	// using contents will get comments regular, text, and comment nodes
+	j = jQuery("#nonnodes").contents();
+	d = jQuery("<div/>").appendTo("#nonnodes").append( j );
+
+	equal( jQuery("#nonnodes").length, 1, "Check node,textnode,comment append moved leaving just the div" );
+	equal( d.contents().length, 3, "Check node,textnode,comment append works" );
+	d.contents().appendTo("#nonnodes");
+	d.remove();
+	equal( jQuery("#nonnodes").contents().length, 3, "Check node,textnode,comment append cleanup worked" );
+
+	$input = jQuery("<input type='checkbox'/>").prop( "checked", true ).appendTo("#testForm");
+	equal( $input[ 0 ].checked, true, "A checked checkbox that is appended stays checked" );
+
+	$radioChecked = jQuery("input[type='radio'][name='R1']").eq( 1 );
+	$radioParent = $radioChecked.parent();
+	$radioUnchecked = jQuery("<input type='radio' name='R1' checked='checked'/>").appendTo( $radioParent );
+	$radioChecked.trigger("click");
+	$radioUnchecked[ 0 ].checked = false;
+
+	jQuery("<div/>").insertBefore($radioParent).append($radioParent);
+
+	equal( $radioChecked[ 0 ].checked, true, "Reappending radios uphold which radio is checked" );
+	equal( $radioUnchecked[ 0 ].checked, false, "Reappending radios uphold not being checked" );
+
+	equal( jQuery("<div/>").append( valueObj("option<area/>") )[ 0 ].childNodes.length, 2, "HTML-string with leading text should be processed correctly" );
+}
+
+test( "append(String|Element|Array<Element>|jQuery)", function() {
+	testAppend( manipulationBareObj );
+});
+
+test( "append(Function)", function() {
+	testAppend( manipulationFunctionReturningObj );
+});
+
+test( "append(param) to object, see #11280", function() {
+
+	expect( 5 );
+
+	var object = jQuery( document.createElement("object") ).appendTo( document.body );
+
+	equal( object.children().length, 0, "object does not start with children" );
+
+	object.append( jQuery("<param type='wmode' name='foo'>") );
+	equal( object.children().length, 1, "appended param" );
+	equal( object.children().eq(0).attr("name"), "foo", "param has name=foo" );
+
+	object = jQuery("<object><param type='baz' name='bar'></object>");
+	equal( object.children().length, 1, "object created with child param" );
+	equal( object.children().eq(0).attr("name"), "bar", "param has name=bar" );
+});
+
+test( "append(Function) with incoming value", function() {
+
+	expect( 12 );
+
+	var defaultText, result, select, old, expected;
+
+	defaultText = "Try them out:";
+	old = jQuery("#first").html();
+
+	result = jQuery("#first").append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return "<b>buga</b>";
+	});
+	equal( result.text(), defaultText + "buga", "Check if text appending works" );
+
+	select = jQuery("#select3");
+	old = select.html();
+
+	equal( select.append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return "<option value='appendTest'>Append Test</option>";
+	}).find("option:last-child").attr("value"), "appendTest", "Appending html options to select element" );
+
+	QUnit.reset();
+	expected = "This link has class=\"blog\": Simon Willison's WeblogTry them out:";
+	old = jQuery("#sap").html();
+
+	jQuery("#sap").append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return document.getElementById("first");
+	});
+	equal( jQuery("#sap").text(), expected, "Check for appending of element" );
+
+	QUnit.reset();
+	expected = "This link has class=\"blog\": Simon Willison's WeblogTry them out:Yahoo";
+	old = jQuery("#sap").html();
+
+	jQuery("#sap").append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return [ document.getElementById("first"), document.getElementById("yahoo") ];
+	});
+	equal( jQuery("#sap").text(), expected, "Check for appending of array of elements" );
+
+	QUnit.reset();
+	expected = "This link has class=\"blog\": Simon Willison's WeblogYahooTry them out:";
+	old = jQuery("#sap").html();
+
+	jQuery("#sap").append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return jQuery("#yahoo, #first");
+	});
+	equal( jQuery("#sap").text(), expected, "Check for appending of jQuery object" );
+
+	QUnit.reset();
+	old = jQuery("#sap").html();
+
+	jQuery("#sap").append(function( i, val ) {
+		equal( val, old, "Make sure the incoming value is correct." );
+		return 5;
+	});
+	ok( jQuery("#sap")[ 0 ].innerHTML.match( /5$/ ), "Check for appending a number" );
+
+	QUnit.reset();
+});
+
+test( "XML DOM manipulation (#9960)", function() {
+
+	expect( 5 );
+
+	var
+		xmlDoc1 = jQuery.parseXML("<scxml xmlns='http://www.w3.org/2005/07/scxml' version='1.0'><state x='100' y='100' initial='actions' id='provisioning'></state><state x='100' y='100' id='error'></state><state x='100' y='100' id='finished' final='true'></state></scxml>"),
+		xmlDoc2 = jQuery.parseXML("<scxml xmlns='http://www.w3.org/2005/07/scxml' version='1.0'><state id='provisioning3'></state></scxml>"),
+		xml1 = jQuery( xmlDoc1 ),
+		xml2 = jQuery( xmlDoc2 ),
+		scxml1 = jQuery( "scxml", xml1 ),
+		scxml2 = jQuery( "scxml", xml2 ),
+		state = scxml2.find("state");
+
+	scxml1.append( state );
+	strictEqual( scxml1[0].lastChild, state[0], "append" );
+
+	scxml1.prepend( state );
+	strictEqual( scxml1[0].firstChild, state[0], "prepend" );
+
+	scxml1.find("#finished").after( state );
+	strictEqual( scxml1[0].lastChild, state[0], "after" );
+
+	scxml1.find("#provisioning").before( state );
+	strictEqual( scxml1[0].firstChild, state[0], "before" );
+
+	scxml2.replaceWith( scxml1 );
+	deepEqual( jQuery( "state", xml2 ).get(), scxml1.find("state").get(), "replaceWith" );
+});
+
+test( "append the same fragment with events (Bug #6997, 5566)", function() {
+
+	var element, clone,
+		doExtra = !jQuery.support.noCloneEvent && document["fireEvent"];
+
+	expect( 2 + ( doExtra ? 1 : 0 ) );
+
+	stop();
+
+	// This patch modified the way that cloning occurs in IE; we need to make sure that
+	// native event handlers on the original object don't get disturbed when they are
+	// modified on the clone
+	if ( doExtra ) {
+		element = jQuery("div:first").on( "click", function() {
+			ok( true, "Event exists on original after being unbound on clone" );
+			jQuery( this ).off("click");
+		});
+		clone = element.clone( true ).off("click");
+		clone[ 0 ].fireEvent("onclick");
+		element[ 0 ].fireEvent("onclick");
+
+		// manually clean up detached elements
+		clone.remove();
+	}
+
+	element = jQuery("<a class='test6997'></a>").on( "click", function() {
+		ok( true, "Append second element events work" );
+	});
+
+	jQuery("#listWithTabIndex li").append( element )
+		.find("a.test6997").eq( 1 ).trigger("click");
+
+	element = jQuery("<li class='test6997'></li>").on( "click", function() {
+		ok( true, "Before second element events work" );
+		start();
+	});
+
+	jQuery("#listWithTabIndex li").before( element );
+	jQuery("#listWithTabIndex li.test6997").eq( 1 ).trigger("click");
+});
+
+test( "append HTML5 sectioning elements (Bug #6485)", function() {
+
+	expect( 2 );
+
+	var article, aside;
+
+	jQuery("#qunit-fixture").append("<article style='font-size:10px'><section><aside>HTML5 elements</aside></section></article>");
+
+	article = jQuery("article");
+	aside = jQuery("aside");
+
+	equal( article.get( 0 ).style.fontSize, "10px", "HTML5 elements are styleable" );
+	equal( aside.length, 1, "HTML5 elements do not collapse their children" );
+});
+
+if ( jQuery.css ) {
+	test( "HTML5 Elements inherit styles from style rules (Bug #10501)", function() {
+
+		expect( 1 );
+
+		jQuery("#qunit-fixture").append("<article id='article'></article>");
+		jQuery("#article").append("<section>This section should have a pink background.</section>");
+
+		// In IE, the missing background color will claim its value is "transparent"
+		notEqual( jQuery("section").css("background-color"), "transparent", "HTML5 elements inherit styles" );
+	});
+}
+
+test( "html(String) with HTML5 (Bug #6485)", function() {
+
+	expect( 2 );
+
+	jQuery("#qunit-fixture").html("<article><section><aside>HTML5 elements</aside></section></article>");
+	equal( jQuery("#qunit-fixture").children().children().length, 1, "Make sure HTML5 article elements can hold children. innerHTML shortcut path" );
+	equal( jQuery("#qunit-fixture").children().children().children().length, 1, "Make sure nested HTML5 elements can hold children." );
+});
+
+test( "IE8 serialization bug", function() {
+
+	expect( 2 );
+	var wrapper = jQuery("<div></div>");
+
+	wrapper.html("<div></div><article></article>");
+	equal( wrapper.children("article").length, 1, "HTML5 elements are insertable with .html()" );
+
+	wrapper.html("<div></div><link></link>");
+	equal( wrapper.children("link").length, 1, "Link elements are insertable with .html()" );
+});
+
+test( "html() object element #10324", function() {
+
+	expect( 1 );
+
+	var object = jQuery("<object id='object2'><param name='object2test' value='test'></param></object>?").appendTo("#qunit-fixture"),
+		clone = object.clone();
+
+	equal( clone.html(), object.html(), "html() returns correct innerhtml of cloned object elements" );
+});
+
+test( "append(xml)", function() {
+
+	expect( 1 );
+
+	var xmlDoc, xml1, xml2;
+
+	function createXMLDoc() {
+		// Initialize DOM based upon latest installed MSXML or Netscape
+		var elem, n, len,
+			aActiveX =
+				[ "MSXML6.DomDocument",
+				"MSXML3.DomDocument",
+				"MSXML2.DomDocument",
+				"MSXML.DomDocument",
+				"Microsoft.XmlDom" ];
+
+		if ( document.implementation && "createDocument" in document.implementation ) {
+			return document.implementation.createDocument( "", "", null );
+		} else {
+			// IE
+			for ( n = 0, len = aActiveX.length; n < len; n++ ) {
+				try {
+					elem = new ActiveXObject( aActiveX[ n ] );
+					return elem;
+				} catch(_) {}
+			}
+		}
+	}
+
+	xmlDoc = createXMLDoc();
+	xml1 = xmlDoc.createElement("head");
+	xml2 = xmlDoc.createElement("test");
+
+	ok( jQuery(xml1).append(xml2), "Append an xml element to another without raising an exception." );
+
+});
+
+test( "appendTo(String|Element|Array<Element>|jQuery)", function() {
+
+	expect( 16 );
+
+	var defaultText, l, expected, num, div;
+
+	defaultText = "Try them out:";
+	jQuery("<b>buga</b>").appendTo("#first");
+	equal( jQuery("#first").text(), defaultText + "buga", "Check if text appending works" );
+	equal( jQuery("<option value='appendTest'>Append Test</option>").appendTo("#select3").parent().find("option:last-child").attr("value"), "appendTest", "Appending html options to select element" );
+
+	l = jQuery("#first").children().length + 2;
+	jQuery("<strong>test</strong>");
+	jQuery("<strong>test</strong>");
+	jQuery([ jQuery("<strong>test</strong>")[ 0 ], jQuery("<strong>test</strong>")[ 0 ] ])
+		.appendTo("#first");
+	equal( jQuery("#first").children().length, l, "Make sure the elements were inserted." );
+	equal( jQuery("#first").children().last()[ 0 ].nodeName.toLowerCase(), "strong", "Verify the last element." );
+
+	QUnit.reset();
+	expected = "This link has class=\"blog\": Simon Willison's WeblogTry them out:";
+	jQuery( document.getElementById("first") ).appendTo("#sap");
+	equal( jQuery("#sap").text(), expected, "Check for appending of element" );
+
+	expected = "This link has class=\"blog\": Simon Willison's WeblogTry them out:Yahoo";
+	jQuery([ document.getElementById("first"), document.getElementById("yahoo") ]).appendTo("#sap");
+	equal( jQuery("#sap").text(), expected, "Check for appending of array of elements" );
+
+	QUnit.reset();
+	ok( jQuery(document.createElement("script")).appendTo("body").length, "Make sure a disconnected script can be appended." );
+
+	expected = "This link has class=\"blog\": Simon Willison's WeblogYahooTry them out:";
+	jQuery("#yahoo, #first").appendTo("#sap");
+	equal( jQuery("#sap").text(), expected, "Check for appending of jQuery object" );
+
+	jQuery("#select1").appendTo("#foo");
+	t( "Append select", "#foo select", [ "select1" ] );
+
+	div = jQuery("<div/>").on( "click", function() {
+		ok( true, "Running a cloned click." );
+	});
+	div.appendTo("#qunit-fixture, #moretests");
+
+	jQuery("#qunit-fixture div").last().trigger("click");
+	jQuery("#moretests div").last().trigger("click");
+
+	div = jQuery("<div/>").appendTo("#qunit-fixture, #moretests");
+
+	equal( div.length, 2, "appendTo returns the inserted elements" );
+
+	div.addClass("test");
+
+	ok( jQuery("#qunit-fixture div").last().hasClass("test"), "appendTo element was modified after the insertion" );
+	ok( jQuery("#moretests div").last().hasClass("test"), "appendTo element was modified after the insertion" );
+
+	div = jQuery("<div/>");
+	jQuery("<span>a</span><b>b</b>").filter("span").appendTo( div );
+
+	equal( div.children().length, 1, "Make sure the right number of children were inserted." );
+
+	div = jQuery("#moretests div");
+
+	num = jQuery("#qunit-fixture div").length;
+	div.remove().appendTo("#qunit-fixture");
+
+	equal( jQuery("#qunit-fixture div").length, num, "Make sure all the removed divs were inserted." );
+});
+
+function testPrepend( val ) {
+
+	expect( 6 );
+
+	var defaultText, res

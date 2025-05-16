@@ -1,0 +1,128 @@
+<div class="page-content-inner">
+
+    <!-- Basic Form Elements -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h3> Register new complaint</h3>
+        </div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="margin-bottom-50">
+               
+                        <div class="form-group row">
+                            <div class="col-md-12">
+                                <ui-select ng-model="person.selected"  on-select="onSelectCallback($item, $model)" style="width:100%;">
+                                    <ui-select-match placeholder="Select or search a person in the list...">{{$select.selected.Name}}</ui-select-match>
+                                    <ui-select-choices repeat="item in customers | filter: $select.search | limitTo: 5">
+                                        <!--<div ng-bind-html="item.Name | highlight: $select.search"></div>-->
+                                        <i class="fa fa-circle" ng-style="item.Status == 'Active' ? {'color': '#5dc698'} : item.Status == 'Suspended' ?  {'color': '#fc6167'} : item.Status == 'Inactive' ?  {'color': 'orange'} :  {'color': '#0190da'}"></i>
+                                        <small ng-bind-html="item.CustomerId | highlight: $select.search"></small> |
+                                        <small ng-bind-html="item.Name | highlight: $select.search"></small> |
+                                        <small ng-bind-html="item.Mobile | highlight: $select.search"></small>
+                                        <small style="float: right" ng-bind-html="item.Operator.Name | highlight: $select.search"></small>
+
+                                    </ui-select-choices>
+                                </ui-select>
+                                
+                            </div>
+                          </div>
+
+                    <form id="customerForm" name="complaintForm" ng-submit="AddComplaint()" novalidate>
+                        <div class="row">
+                            <div class="form-group">
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Customer ID : </i><label>{{customerSelected.CustomerId}}</label>
+                                      
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Name : </i><label>{{customerSelected.Name}}</label>                                 
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <br/>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Email :</i><label>{{customerSelected.Email}}</label>    
+                                       
+                                        
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Mobile :</i><label>{{customerSelected.Mobile}}</label>
+                                      
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <br/>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Area :</i> <label>{{customerSelected.Area}}</label>
+                                        
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="col-md-6">
+                                        <i>Operator : </i> <label>{{customerSelected.Operator.Name}}</label>
+                                        
+                                      
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div> <br/>
+
+                        <div class="row">
+                            <div class="form-group">
+
+                                <div>
+                                    <div class=" col-md-6">
+                                        <i>Registration Date :</i> <label>{{customerSelected.RegDate| date : format : timezone}}</label>
+                                        
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <i>Has Bnet Router :</i> <label>{{customerSelected.IsRouter}}</label>
+                                    
+                                </div>
+
+
+                            </div>
+
+                        </div> <br/>
+
+                        <div class="row">
+                            <div class="form-group">
+                                <div class="col-md-12">
+                                    <label>Compliant</label>
+                                    <textarea class="form-control" rows="3" id="l15" ng-model="complaint.complaint"></textarea>
+                                </div>
+                             </div> 
+                        </div>
+                        <br />
+                        <div class="row">
+                            <div class="form-group">
+                                <button ng-class="complaint.complaint == Null || complaint.complaint == '' ? 'btn btn-default width-full margin-top-10' : 'btn btn-primary width-full margin-top-10'" type="submit" ng-disabled="complaint.complaint== Null || complaint.complaint ==''">Add</button>
+                            </div>
+                        </div>
+
+                    </form>
+             
+                    <!-- End Horizontal Form -->
+                </div>
+            </div>
+        </div>
+    </div>
+        </section>
+</div>

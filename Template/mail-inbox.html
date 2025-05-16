@@ -1,0 +1,1005 @@
+sure the incoming value is correct." );
+		return 5;
+	}).html(), "5", "Setting a number as html" );
+
+	equal( $div.html(function( i, val ) {
+		equal( val, "5", "Make sure the incoming value is correct." );
+		return 0;
+	}).html(), "0", "Setting a zero as html" );
+
+	$div2 = jQuery("<div/>");
+	insert = "&lt;div&gt;hello1&lt;/div&gt;";
+	equal( $div2.html(function( i, val ) {
+		equal( val, "", "Make sure the incoming value is correct." );
+		return insert;
+	}).html().replace(/>/g, "&gt;"), insert, "Verify escaped insertion." );
+
+	equal( $div2.html(function( i, val ) {
+		equal( val.replace(/>/g, "&gt;"), insert, "Make sure the incoming value is correct." );
+		return "x" + insert;
+	}).html().replace( />/g, "&gt;" ), "x" + insert, "Verify escaped insertion." );
+
+	equal( $div2.html(function( i, val ) {
+		equal( val.replace( />/g, "&gt;" ), "x" + insert, "Make sure the incoming value is correct." );
+		return " " + insert;
+	}).html().replace( />/g, "&gt;" ), " " + insert, "Verify escaped insertion." );
+});
+
+test( "clone()/html() don't expose jQuery/Sizzle expandos (#12858)", function() {
+
+	expect( 2 );
+
+	var $content = jQuery("<div><b><i>text</i></b></div>").appendTo("#qunit-fixture"),
+		expected = /^<b><i>text<\/i><\/b>$/i;
+
+	// Attach jQuery and Sizzle data (the latter with a non-qSA nth-child)
+	try {
+		$content.find(":nth-child(1):lt(4)").data( "test", true );
+
+	// But don't break on a non-Sizzle build
+	} catch( e ) {
+		$content.find("*").data( "test", true );
+	}
+
+	ok( expected.test( $content.clone( false )[ 0 ].innerHTML ), "clone()" );
+	ok( expected.test( $content.html() ), "html()" );
+});
+
+function testRemove( method ) {
+	var markup, div,
+		first = jQuery("#ap").children().first();
+
+	first.data("foo", "bar");
+
+	jQuery("#ap").children()[ method ]();
+	ok( jQuery("#ap").text().length > 10, "Check text is not removed" );
+	equal( jQuery("#ap").children().length, 0, "Check remove" );
+
+	equal( first.data("foo"), method === "remove" ? null : "bar", "first data" );
+
+	QUnit.reset();
+	jQuery("#ap").children()[ method ]("a");
+	ok( jQuery("#ap").text().length > 10, "Check text is not removed" );
+	equal( jQuery("#ap").children().length, 1, "Check filtered remove" );
+
+	jQuery("#ap").children()[ method ]("a, code");
+	equal( jQuery("#ap").children().length, 0, "Check multi-filtered remove" );
+
+	// Positional and relative selectors
+	markup = "<div><span>1</span><span>2</span><span>3</span><span>4</span></div>";
+	div = jQuery( markup );
+	div.children().remove("span:nth-child(2n)");
+	equal( div.text(), "13", "relative selector in " + method );
+	div = jQuery( markup );
+	div.children().remove("span:first");
+	equal( div.text(), "234", "positional selector in " + method );
+	div = jQuery( markup );
+	div.children().remove("span:last");
+	equal( div.text(), "123", "positional selector in " + method );
+
+	// using contents will get comments regular, text, and comment nodes
+	// Handle the case where no comment is in the document
+	ok( jQuery("#nonnodes").contents().length >= 2, "Check node,textnode,comment remove works" );
+	jQuery("#nonnodes").contents()[ method ]();
+	equal( jQuery("#nonnodes").contents().length, 0, "Check node,textnode,comment remove works" );
+
+	// manually clean up detached elements
+	if (method === "detach") {
+		first.remove();
+	}
+}
+
+test( "remove()", 11, function() {
+	testRemove("remove");
+});
+
+test( "remove() event cleaning ", 1, function() {
+	var count, first, cleanUp;
+
+	count = 0;
+	first = jQuery("#ap").children().first();
+	cleanUp = first.on( "click", function() {
+		count++;
+	}).remove().appendTo("#qunit-fixture").trigger("click");
+
+	strictEqual( 0, count, "Event handler has been removed" );
+
+	// Clean up detached data
+	cleanUp.remove();
+});
+
+test( "remove() in document order #13779", 1, function() {
+	var last,
+		cleanData = jQuery.cleanData;
+
+	jQuery.cleanData = function( nodes ) {
+		last = jQuery.text( nodes[0] );
+		cleanData.call( this, nodes );
+	};
+
+	jQuery("#qunit-fixture").append(
+		jQuery.parseHTML(
+			"<div class='removal-fixture'>1</div>" +
+			"<div class='removal-fixture'>2</div>" +
+			"<div class='removal-fixture'>3</div>"
+		)
+	);
+
+	jQuery(".removal-fixture").remove();
+
+	equal( last, 3, "The removal fixtures were removed in document order" );
+
+	jQuery.cleanData = cleanData;
+});
+
+test( "detach()", 11, function() {
+	testRemove("detach");
+});
+
+test( "detach() event cleaning ", 1, function() {
+	var count, first, cleanUp;
+
+	count = 0;
+	first = jQuery("#ap").children().first();
+	cleanUp = first.on( "click", function() {
+		count++;
+	}).detach().appendTo("#qunit-fixture").trigger("click");
+
+	strictEqual( 1, count, "Event handler has not been removed" );
+
+	// Clean up detached data
+	cleanUp.remove();
+});
+
+test("empty()", function() {
+
+	expect( 6 );
+
+	equal( jQuery("#ap").children().empty().text().length, 0, "Check text is removed" );
+	equal( jQuery("#ap").children().length, 4, "Check elements are not removed" );
+
+	// using contents will get comments regular, text, and comment nodes
+	var j = jQuery("#nonnodes").contents();
+	j.empty();
+	equal( j.html(), "", "Check node,textnode,comment empty works" );
+
+	// Ensure oldIE empties selects (#12336)
+	notEqual( $("#select1").find("option").length, 0, "Have some initial options" );
+	$("#select1").empty();
+	equal( $("#select1").find("option").length, 0, "No more option elements found" );
+	equal( $("#select1")[0].options.length, 0, "options.length cleared as well" );
+	});
+
+test( "jQuery.cleanData", function() {
+
+	expect( 14 );
+
+	var type, pos, div, child;
+
+	type = "remove";
+
+	// Should trigger 4 remove event
+	div = getDiv().remove();
+
+	// Should both do nothing
+	pos = "Outer";
+	div.trigger("click");
+
+	pos = "Inner";
+	div.children().trigger("click");
+
+	type = "empty";
+	div = getDiv();
+	child = div.children();
+
+	// Should trigger 2 remove event
+	div.empty();
+
+	// Should trigger 1
+	pos = "Outer";
+	div.trigger("click");
+
+	// Should do nothing
+	pos = "Inner";
+	child.trigger("click");
+
+	// Should trigger 2
+	div.remove();
+
+	type = "html";
+
+	div = getDiv();
+	child = div.children();
+
+	// Should trigger 2 remove event
+	div.html("<div></div>");
+
+	// Should trigger 1
+	pos = "Outer";
+	div.trigger("click");
+
+	// Should do nothing
+	pos = "Inner";
+	child.trigger("click");
+
+	// Should trigger 2
+	div.remove();
+
+	function getDiv() {
+		var div = jQuery("<div class='outer'><div class='inner'></div></div>").on( "click", function() {
+			ok( true, type + " " + pos + " Click event fired." );
+		}).on( "focus", function() {
+			ok( true, type + " " + pos + " Focus event fired." );
+		}).find("div").on( "click", function() {
+			ok( false, type + " " + pos + " Click event fired." );
+		}).on( "focus", function() {
+			ok( false, type + " " + pos + " Focus event fired." );
+		}).end().appendTo("body");
+
+		div[ 0 ].detachEvent = div[ 0 ].removeEventListener = function( t ) {
+			ok( true, type + " Outer " + t + " event unbound" );
+		};
+
+		div[ 0 ].firstChild.detachEvent = div[ 0 ].firstChild.removeEventListener = function( t ) {
+			ok( true, type + " Inner " + t + " event unbound" );
+		};
+
+		return div;
+	}
+});
+
+test( "jQuery.buildFragment - no plain-text caching (Bug #6779)", function() {
+
+	expect( 1 );
+
+	// DOM manipulation fails if added text matches an Object method
+	var i,
+		$f = jQuery( "<div />" ).appendTo( "#qunit-fixture" ),
+		bad = [ "start-", "toString", "hasOwnProperty", "append", "here&there!", "-end" ];
+
+	for ( i = 0; i < bad.length; i++ ) {
+		try {
+			$f.append( bad[ i ] );
+		}
+		catch( e ) {}
+	}
+	equal( $f.text(), bad.join(""), "Cached strings that match Object properties" );
+	$f.remove();
+});
+
+test( "jQuery.html - execute scripts escaped with html comment or CDATA (#9221)", function() {
+
+	expect( 3 );
+
+	jQuery([
+				"<script type='text/javascript'>",
+				"<!--",
+				"ok( true, '<!-- handled' );",
+				"//-->",
+				"</script>"
+			].join("\n")).appendTo("#qunit-fixture");
+	jQuery([
+				"<script type='text/javascript'>",
+				"<![CDATA[",
+				"ok( true, '<![CDATA[ handled' );",
+				"//]]>",
+				"</script>"
+			].join("\n")).appendTo("#qunit-fixture");
+	jQuery([
+				"<script type='text/javascript'>",
+				"<!--//--><![CDATA[//><!--",
+				"ok( true, '<!--//--><![CDATA[//><!-- (Drupal case) handled' );",
+				"//--><!]]>",
+				"</script>"
+			].join("\n")).appendTo("#qunit-fixture");
+});
+
+test( "jQuery.buildFragment - plain objects are not a document #8950", function() {
+
+	expect( 1 );
+
+	try {
+		jQuery( "<input type='hidden'>", {} );
+		ok( true, "Does not allow attribute object to be treated like a doc object" );
+	} catch ( e ) {}
+});
+
+test( "jQuery.clone - no exceptions for object elements #9587", function() {
+
+	expect( 1 );
+
+	try {
+		jQuery("#no-clone-exception").clone();
+		ok( true, "cloned with no exceptions" );
+	} catch( e ) {
+		ok( false, e.message );
+	}
+});
+
+test( "Cloned, detached HTML5 elems (#10667,10670)", function() {
+
+	expect( 7 );
+
+	var $clone,
+		$section = jQuery( "<section>" ).appendTo( "#qunit-fixture" );
+
+	// First clone
+	$clone = $section.clone();
+
+	// Infer that the test is being run in IE<=8
+	if ( $clone[ 0 ].outerHTML && !jQuery.support.opacity ) {
+		// This branch tests cloning nodes by reading the outerHTML, used only in IE<=8
+		equal( $clone[ 0 ].outerHTML, "<section></section>", "detached clone outerHTML matches '<section></section>'" );
+	} else {
+		// This branch tests a known behaviour in modern browsers that should never fail.
+		// Included for expected test count symmetry (expecting 1)
+		equal( $clone[ 0 ].nodeName, "SECTION", "detached clone nodeName matches 'SECTION' in modern browsers" );
+	}
+
+	// Bind an event
+	$section.on( "click", function() {
+		ok( true, "clone fired event" );
+	});
+
+	// Second clone (will have an event bound)
+	$clone = $section.clone( true );
+
+	// Trigger an event from the first clone
+	$clone.trigger("click");
+	$clone.off("click");
+
+	// Add a child node with text to the original
+	$section.append("<p>Hello</p>");
+
+	// Third clone (will have child node and text)
+	$clone = $section.clone( true );
+
+	equal( $clone.find("p").text(), "Hello", "Assert text in child of clone" );
+
+	// Trigger an event from the third clone
+	$clone.trigger("click");
+	$clone.off("click");
+
+	// Add attributes to copy
+	$section.attr({
+		"class": "foo bar baz",
+		"title": "This is a title"
+	});
+
+	// Fourth clone (will have newly added attributes)
+	$clone = $section.clone( true );
+
+	equal( $clone.attr("class"), $section.attr("class"), "clone and element have same class attribute" );
+	equal( $clone.attr("title"), $section.attr("title"), "clone and element have same title attribute" );
+
+	// Remove the original
+	$section.remove();
+
+	// Clone the clone
+	$section = $clone.clone( true );
+
+	// Remove the clone
+	$clone.remove();
+
+	// Trigger an event from the clone of the clone
+	$section.trigger("click");
+
+	// Unbind any remaining events
+	$section.off("click");
+	$clone.off("click");
+});
+
+test( "Guard against exceptions when clearing safeChildNodes", function() {
+
+	expect( 1 );
+
+	var div;
+
+	try {
+		div = jQuery("<div/><hr/><code/><b/>");
+	} catch(e) {}
+
+	ok( div && div.jquery, "Created nodes safely, guarded against exceptions on safeChildNodes[ -1 ]" );
+});
+
+test( "Ensure oldIE creates a new set on appendTo (#8894)", function() {
+
+	expect( 5 );
+
+	strictEqual( jQuery("<div/>").clone().addClass("test").appendTo("<div/>").end().end().hasClass("test"), false, "Check jQuery.fn.appendTo after jQuery.clone" );
+	strictEqual( jQuery("<div/>").find("p").end().addClass("test").appendTo("<div/>").end().end().hasClass("test"), false, "Check jQuery.fn.appendTo after jQuery.fn.find" );
+	strictEqual( jQuery("<div/>").text("test").addClass("test").appendTo("<div/>").end().end().hasClass("test"), false, "Check jQuery.fn.appendTo after jQuery.fn.text" );
+	strictEqual( jQuery("<bdi/>").clone().addClass("test").appendTo("<div/>").end().end().hasClass("test"), false, "Check jQuery.fn.appendTo after clone html5 element" );
+	strictEqual( jQuery("<p/>").appendTo("<div/>").end().length, jQuery("<p>test</p>").appendTo("<div/>").end().length, "Elements created with createElement and with createDocumentFragment should be treated alike" );
+});
+
+test( "html() - script exceptions bubble (#11743)", function() {
+
+	expect( 2 );
+
+	raises(function() {
+		jQuery("#qunit-fixture").html("<script>undefined(); ok( false, 'Exception not thrown' );</script>");
+		ok( false, "Exception ignored" );
+	}, "Exception bubbled from inline script" );
+
+	if ( jQuery.ajax ) {
+		raises(function() {
+			jQuery("#qunit-fixture").html("<script src='data/badcall.js'></script>");
+			ok( false, "Exception ignored" );
+		}, "Exception thrown in remote script" );
+	} else {
+		ok( true, "No jQuery.ajax" );
+	}
+});
+
+test( "checked state is cloned with clone()", function() {
+
+	expect( 2 );
+
+	var elem = jQuery.parseHTML("<input type='checkbox' checked='checked'/>")[ 0 ];
+	elem.checked = false;
+	equal( jQuery(elem).clone().attr("id","clone")[ 0 ].checked, false, "Checked false state correctly cloned" );
+
+	elem = jQuery.parseHTML("<input type='checkbox'/>")[ 0 ];
+	elem.checked = true;
+	equal( jQuery(elem).clone().attr("id","clone")[ 0 ].checked, true, "Checked true state correctly cloned" );
+});
+
+test( "manipulate mixed jQuery and text (#12384, #12346)", function() {
+
+	expect( 2 );
+
+	var div = jQuery("<div>a</div>").append( "&nbsp;", jQuery("<span>b</span>"), "&nbsp;", jQuery("<span>c</span>") ),
+		nbsp = String.fromCharCode( 160 );
+
+	equal( div.text(), "a" + nbsp + "b" + nbsp+ "c", "Appending mixed jQuery with text nodes" );
+
+	div = jQuery("<div><div></div></div>")
+		.find("div")
+		.after( "<p>a</p>", "<p>b</p>" )
+		.parent();
+	equal( div.find("*").length, 3, "added 2 paragraphs after inner div" );
+});
+
+testIframeWithCallback( "buildFragment works even if document[0] is iframe's window object in IE9/10 (#12266)", "manipulation/iframe-denied.html", function( test ) {
+	expect( 1 );
+
+	ok( test.status, test.description );
+});
+
+test( "script evaluation (#11795)", function() {
+
+	expect( 13 );
+
+	var scriptsIn, scriptsOut,
+		fixture = jQuery("#qunit-fixture").empty(),
+		objGlobal = (function() {
+			return this;
+		})(),
+		isOk = objGlobal.ok,
+		notOk = function() {
+			var args = arguments;
+			args[ 0 ] = !args[ 0 ];
+			return isOk.apply( this, args );
+		};
+
+	objGlobal.ok = notOk;
+	scriptsIn = jQuery([
+		"<script type='something/else'>ok( false, 'evaluated: non-script' );</script>",
+		"<script type='text/javascript'>ok( true, 'evaluated: text/javascript' );</script>",
+		"<script type='text/ecmascript'>ok( true, 'evaluated: text/ecmascript' );</script>",
+		"<script>ok( true, 'evaluated: no type' );</script>",
+		"<div>",
+			"<script type='something/else'>ok( false, 'evaluated: inner non-script' );</script>",
+			"<script type='text/javascript'>ok( true, 'evaluated: inner text/javascript' );</script>",
+			"<script type='text/ecmascript'>ok( true, 'evaluated: inner text/ecmascript' );</script>",
+			"<script>ok( true, 'evaluated: inner no type' );</script>",
+		"</div>"
+	].join(""));
+	scriptsIn.appendTo( jQuery("<div class='detached'/>") );
+	objGlobal.ok = isOk;
+
+	scriptsOut = fixture.append( scriptsIn ).find("script");
+	equal( scriptsOut[ 0 ].type, "something/else", "Non-evaluated type." );
+	equal( scriptsOut[ 1 ].type, "text/javascript", "Evaluated type." );
+	deepEqual( scriptsOut.get(), fixture.find("script").get(), "All script tags remain." );
+
+	objGlobal.ok = notOk;
+	scriptsOut = scriptsOut.add( scriptsOut.clone() ).appendTo( fixture.find("div") );
+	deepEqual( fixture.find("div script").get(), scriptsOut.get(), "Scripts cloned without reevaluation" );
+	fixture.append( scriptsOut.detach() );
+	deepEqual( fixture.children("script").get(), scriptsOut.get(), "Scripts detached without reevaluation" );
+	objGlobal.ok = isOk;
+
+	if ( jQuery.ajax ) {
+		Globals.register("testBar");
+		jQuery("#qunit-fixture").append( "<script src='" + url("data/test.js") + "'/>" );
+		strictEqual( window["testBar"], "bar", "Global script evaluation" );
+	} else {
+		ok( true, "No jQuery.ajax" );
+		ok( true, "No jQuery.ajax" );
+	}
+});
+
+test( "jQuery._evalUrl (#12838)", function() {
+
+	expect( 5 );
+
+	var message, expectedArgument,
+		ajax = jQuery.ajax,
+		evalUrl = jQuery._evalUrl;
+
+	message = "jQuery.ajax implementation";
+	expectedArgument = 1;
+	jQuery.ajax = function( input ) {
+		equal( ( input.url || input ).slice( -1 ), expectedArgument, message );
+		expectedArgument++;
+	};
+	jQuery("#qunit-fixture").append("<script src='1'/><script src='2'/>");
+	equal( expectedArgument, 3, "synchronous execution" );
+
+	message = "custom implementation";
+	expectedArgument = 3;
+	jQuery._evalUrl = jQuery.ajax;
+	jQuery.ajax = function( options ) {
+		strictEqual( options, {}, "Unexpected call to jQuery.ajax" );
+	};
+	jQuery("#qunit-fixture").append("<script src='3'/><script src='4'/>");
+
+	jQuery.ajax = ajax;
+	jQuery._evalUrl = evalUrl;
+});
+
+test( "insertAfter, insertBefore, etc do not work when destination is original element. Element is removed (#4087)", function() {
+
+	expect( 10 );
+
+	var elems;
+
+	jQuery.each([
+		"appendTo",
+		"prependTo",
+		"insertBefore",
+		"insertAfter",
+		"replaceAll"
+	], function( index, name ) {
+		elems = jQuery( [
+			"<ul id='test4087-complex'><li class='test4087'><div>c1</div>h1</li><li><div>c2</div>h2</li></ul>",
+			"<div id='test4087-simple'><div class='test4087-1'>1<div class='test4087-2'>2</div><div class='test4087-3'>3</div></div></div>",
+			"<div id='test4087-multiple'><div class='test4087-multiple'>1</div><div class='test4087-multiple'>2</div></div>"
+		].join("") ).appendTo( "#qunit-fixture" );
+
+		// complex case based on http://jsfiddle.net/pbramos/gZ7vB/
+		jQuery("#test4087-complex div")[ name ]("#test4087-complex li:last-child div:last-child");
+		equal( jQuery("#test4087-complex li:last-child div").length, name === "replaceAll" ? 1 : 2, name +" a node to itself, complex case." );
+
+		// simple case
+		jQuery( ".test4087-1" )[ name ](".test4087-1");
+		equal( jQuery(".test4087-1").length, 1, name +" a node to itself, simple case." );
+
+		// clean for next test
+		jQuery("#test4087-complex").remove();
+		jQuery("#test4087-simple").remove();
+		jQuery("#test4087-multiple").remove();
+	});
+});
+
+test( "Index for function argument should be received (#13094)", 2, function() {
+	var i = 0;
+
+	jQuery("<div/><div/>").before(function( index ) {
+		equal( index, i++, "Index should be correct" );
+	});
+
+});
+
+test( "Make sure jQuery.fn.remove can work on elements in documentFragment", 1, function() {
+	var fragment = document.createDocumentFragment(),
+		div = fragment.appendChild( document.createElement("div") );
+
+	jQuery( div ).remove();
+
+	equal( fragment.childNodes.length, 0, "div element was removed from documentFragment" );
+});
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               /*!
+ * jQuery Typeahead
+ * Copyright (C) 2017 RunningCoder.org
+ * Licensed under the MIT license
+ *
+ * @author Tom Bertrand
+ * @version 2.8.0 (2017-3-1)
+ * @link http://www.runningcoder.org/jquerytypeahead/
+ */
+;(function (factory) {
+    if (typeof define === 'function' && define.amd) {
+        define('jquery-typeahead', ['jquery'], function (jQuery) {
+            return factory(jQuery);
+        });
+    } else if (typeof module === 'object' && module.exports) {
+        module.exports = function (jQuery, root) {
+            if (jQuery === undefined) {
+                if (typeof window !== 'undefined') {
+                    jQuery = require('jquery');
+                }
+                else {
+                    jQuery = require('jquery')(root);
+                }
+            }
+            return factory(jQuery);
+        }();
+    } else {
+        factory(jQuery);
+    }
+}(function ($) {
+
+    "use strict";
+
+    window.Typeahead = {
+        version: '2.8.0'
+    };
+
+    /**
+     * @private
+     * Default options
+     *
+     * @link http://www.runningcoder.org/jquerytypeahead/documentation/
+     */
+    var _options = {
+        input: null,            // *RECOMMENDED*, jQuery selector to reach Typeahead's input for initialization
+        minLength: 2,           // Accepts 0 to search on focus, minimum character length to perform a search
+        maxLength: false,       // False as "Infinity" will not put character length restriction for searching results
+        maxItem: 8,             // Accepts 0 / false as "Infinity" meaning all the results will be displayed
+        dynamic: false,         // When true, Typeahead will get a new dataset from the source option on every key press
+        delay: 300,             // delay in ms when dynamic option is set to true
+        order: null,            // "asc" or "desc" to sort results
+        offset: false,          // Set to true to match items starting from their first character
+        hint: false,            // Added support for excessive "space" characters
+        accent: false,          // Will allow to type accent and give letter equivalent results, also can define a custom replacement object
+        highlight: true,        // Added "any" to highlight any word in the template, by default true will only highlight display keys
+        group: false,           // Improved feature, Boolean,string,object(key, template (string, function))
+        groupOrder: null,       // New feature, order groups "asc", "desc", Array, Function
+        maxItemPerGroup: null,  // Maximum number of result per Group
+        dropdownFilter: false,  // Take group options string and create a dropdown filter
+        dynamicFilter: null,    // Filter the typeahead results based on dynamic value, Ex: Players based on TeamID
+        backdrop: false,        // Add a backdrop behind Typeahead results
+        backdropOnFocus: false, // Display the backdrop option as the Typeahead input is :focused
+        cache: false,           // Improved option, true OR 'localStorage' OR 'sessionStorage'
+        ttl: 3600000,           // Cache time to live in ms
+        compression: false,     // Requires LZString library
+        searchOnFocus: false,   // Display search results on input focus
+        blurOnTab: true,        // Blur Typeahead when Tab key is pressed, if false Tab will go though search results
+        resultContainer: null,  // List the results inside any container string or jQuery object
+        generateOnLoad: null,   // Forces the source to be generated on page load even if the input is not focused!
+        mustSelectItem: false,  // The submit function only gets called if an item is selected
+        href: null,             // String or Function to format the url for right-click & open in new tab on link results
+        display: ["display"],   // Allows search in multiple item keys ["display1", "display2"]
+        template: null,         // Display template of each of the result list
+        templateValue: null,    // Set the input value template when an item is clicked
+        groupTemplate: null,    // Set a custom template for the groups
+        correlativeTemplate: false, // Compile display keys, enables multiple key search from the template string
+        emptyTemplate: false,   // Display an empty template if no result
+        cancelButton: true,     // If text is detected in the input, a cancel button will be available to reset the input (pressing ESC also cancels)
+        loadingAnimation: true, // Display a loading animation when typeahead is doing request / searching for results
+        filter: true,           // Set to false or function to bypass Typeahead filtering. WARNING: accent, correlativeTemplate, offset & matcher will not be interpreted
+        matcher: null,          // Add an extra filtering function after the typeahead functions
+        source: null,           // Source of data for Typeahead to filter
+        callback: {
+            onInit: null,               // When Typeahead is first initialized (happens only once)
+            onReady: null,              // When the Typeahead initial preparation is completed
+            onShowLayout: null,         // Called when the layout is shown
+            onHideLayout: null,         // Called when the layout is hidden
+            onSearch: null,             // When data is being fetched & analyzed to give search results
+            onResult: null,             // When the result container is displayed
+            onLayoutBuiltBefore: null,  // When the result HTML is build, modify it before it get showed
+            onLayoutBuiltAfter: null,   // Modify the dom right after the results gets inserted in the result container
+            onNavigateBefore: null,     // When a key is pressed to navigate the results, before the navigation happens
+            onNavigateAfter: null,      // When a key is pressed to navigate the results
+            onMouseEnter: null,         // When the mouse enter an item in the result list
+            onMouseLeave: null,         // When the mouse leaves an item in the result list
+            onClickBefore: null,        // Possibility to e.preventDefault() to prevent the Typeahead behaviors
+            onClickAfter: null,         // Happens after the default clicked behaviors has been executed
+            onDropdownFilter: null,     // When the dropdownFilter is changed, trigger this callback
+            onSendRequest: null,        // Gets called when the Ajax request(s) are sent
+            onReceiveRequest: null,     // Gets called when the Ajax request(s) are all received
+            onPopulateSource: null,     // Perform operation on the source data before it gets in Typeahead data
+            onCacheSave: null,          // Perform operation on the source data before it gets in Typeahead cache
+            onSubmit: null,             // When Typeahead form is submitted
+            onCancel: null              // Triggered if the typeahead had text inside and is cleared
+        },
+        selector: {
+            container: "typeahead__container",
+            result: "typeahead__result",
+            list: "typeahead__list",
+            group: "typeahead__group",
+            item: "typeahead__item",
+            empty: "typeahead__empty",
+            display: "typeahead__display",
+            query: "typeahead__query",
+            filter: "typeahead__filter",
+            filterButton: "typeahead__filter-button",
+            dropdown: "typeahead__dropdown",
+            dropdownItem: "typeahead__dropdown-item",
+            button: "typeahead__button",
+            backdrop: "typeahead__backdrop",
+            hint: "typeahead__hint",
+            cancelButton: "typeahead__cancel-button"
+        },
+        debug: false                    // Display debug information (RECOMMENDED for dev environment)
+    };
+
+    /**
+     * @private
+     * Event namespace
+     */
+    var _namespace = ".typeahead";
+
+    /**
+     * @private
+     * Accent equivalents
+     */
+    var _accent = {
+        from: "ãàáäâẽèéëêìíïîõòóöôùúüûñç",
+        to: "aaaaaeeeeeiiiiooooouuuunc"
+    };
+
+    /**
+     * #62 IE9 doesn't trigger "input" event when text gets removed (backspace, ctrl+x, etc)
+     * @private
+     */
+    var _isIE9 = ~window.navigator.appVersion.indexOf("MSIE 9.");
+
+    /**
+     * #193 Clicking on a suggested option does not select it on IE10/11
+     * @private
+     */
+    var _isIE10 = ~window.navigator.appVersion.indexOf("MSIE 10");
+    var _isIE11 = ~window.navigator.userAgent.indexOf("Trident") && ~window.navigator.userAgent.indexOf("rv:11");
+
+    // SOURCE GROUP RESERVED WORDS: ajax, data, url
+    // SOURCE ITEMS RESERVED KEYS: group, display, data, matchedKey, compiled, href
+
+    /**
+     * @constructor
+     * Typeahead Class
+     *
+     * @param {object} node jQuery input object
+     * @param {object} options User defined options
+     */
+    var Typeahead = function (node, options) {
+
+        this.rawQuery = node.val() || '';   // Unmodified input query
+        this.query = node.val() || '';      // Input query
+        this.selector = node[0].selector;   // Typeahead instance selector (to reach from window.Typeahead[SELECTOR])
+        this.deferred = null;               // Promise when "input" event in triggered, this.node.triggerHandler('input').then(() => {})
+        this.tmpSource = {};                // Temp var to preserve the source order for the searchResult function
+        this.source = {};                   // The generated source kept in memory
+        this.dynamicGroups = [];            // Store the source groups that are defined as dynamic
+        this.hasDynamicGroups = false;      // Boolean if at least one of the groups has a dynamic source
+        this.generatedGroupCount = 0;       // Number of groups generated, if limit reached the search can be done
+        this.groupBy = "group";             // This option will change according to filtering or custom grouping
+        this.groups = [];                   // Array of all the available groups, used to build the groupTemplate
+        this.searchGroups = [];             // Array of groups to generate when Typeahead searches data
+        this.generateGroups = [];           // Array of groups to generate when Typeahead requests data
+        this.requestGroups = [];            // Array of groups to request via Ajax
+        this.result = {};                   // Results based on Source-query match (only contains the displayed elements)
+        this.groupTemplate = '';            // Result template at the {{group}} level
+        this.resultHtml = null;             // HTML Results (displayed elements)
+        this.resultCount = 0;               // Total results based on Source-query match
+        this.resultCountPerGroup = {};      // Total results based on Source-query match per group
+        this.options = options;             // Typeahead options (Merged default & user defined)
+        this.node = node;                   // jQuery object of the Typeahead <input>
+        this.namespace = '.' +              // Every Typeahead instance gets its own namespace for events
+            this.helper.slugify.call(this, this.selector) +
+            _namespace;                     // Every Typeahead instance gets its own namespace for events
+        this.container = null;              // Typeahead container, usually right after <form>
+        this.resultContainer = null;        // Typeahead result container (html)
+        this.item = null;                   // The selected item
+        this.xhr = {};                      // Ajax request(s) stack
+        this.hintIndex = null;              // Numeric value of the hint index in the result list
+        this.filters = {                    // Filter list for searching, dropdown and dynamic(s)
+            dropdown: {},                   // Dropdown menu if options.dropdownFilter is set
+            dynamic: {}                     // Checkbox / Radio / Select to filter the source data
+        };
+        this.dropdownFilter = {
+            static: [],                     // Objects that has a value
+            dynamic: []
+        };
+        this.dropdownFilterAll = null;      // The last "all" definition
+        this.isDropdownEvent = false;       // If a dropdownFilter is clicked, this will be true to trigger the callback
+
+        this.requests = {};                 // Store the group:request instead of generating them every time
+
+        this.backdrop = {};                 // The backdrop object
+        this.hint = {};                     // The hint object
+        this.hasDragged = false;            // Will cancel mouseend events if true
+        this.focusOnly = false;             // Focus the input preventing any operations
+
+        this.__construct();
+
+    };
+
+    Typeahead.prototype = {
+
+        _validateCacheMethod: function (cache) {
+
+            var supportedCache = ['localStorage', 'sessionStorage'],
+                supported;
+
+            if (cache === true) {
+                cache = 'localStorage';
+            } else if (typeof cache === "string" && !~supportedCache.indexOf(cache)) {
+                // {debug}
+                if (this.options.debug) {
+                    _debug.log({
+                        'node': this.selector,
+                        'function': 'extendOptions()',
+                        'message': 'Invalid options.cache, possible options are "localStorage" or "sessionStorage"'
+                    });
+
+                    _debug.print();
+                }
+                // {/debug}
+                return false;
+            }
+
+            supported = typeof window[cache] !== "undefined";
+
+            try {
+                window[cache].setItem("typeahead", "typeahead");
+                window[cache].removeItem("typeahead");
+            } catch (e) {
+                supported = false;
+            }
+
+            return supported && cache || false;
+
+        },
+
+        extendOptions: function () {
+
+            this.options.cache = this._validateCacheMethod(this.options.cache);
+
+            if (this.options.compression) {
+                if (typeof LZString !== 'object' || !this.options.cache) {
+                    // {debug}
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'extendOptions()',
+                            'message': 'Missing LZString Library or options.cache, no compression will occur.'
+                        });
+
+                        _debug.print();
+                    }
+                    // {/debug}
+                    this.options.compression = false;
+                }
+            }
+
+            if (!this.options.maxLength || isNaN(this.options.maxLength)) {
+                this.options.maxLength = Infinity;
+            }
+
+            if (typeof this.options.maxItem !== "undefined" && ~[0, false].indexOf(this.options.maxItem)) {
+                this.options.maxItem = Infinity;
+            }
+
+            if (this.options.maxItemPerGroup && !/^\d+$/.test(this.options.maxItemPerGroup)) {
+                this.options.maxItemPerGroup = null;
+            }
+
+            if (this.options.display && !Array.isArray(this.options.display)) {
+                this.options.display = [this.options.display];
+            }
+
+            if (this.options.group) {
+                if (!Array.isArray(this.options.group)) {
+                    if (typeof this.options.group === "string") {
+                        this.options.group = {
+                            key: this.options.group
+                        };
+                    } else if (typeof this.options.group === "boolean") {
+                        this.options.group = {
+                            key: 'group'
+                        };
+                    }
+
+                    this.options.group.key = this.options.group.key || "group";
+                }
+                // {debug}
+                else {
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'extendOptions()',
+                            'message': 'options.group must be a boolean|string|object as of 2.5.0'
+                        });
+
+                        _debug.print();
+                    }
+                }
+                // {/debug}
+            }
+
+            if (this.options.highlight && !~["any", true].indexOf(this.options.highlight)) {
+                this.options.highlight = false;
+            }
+
+            if (this.options.dropdownFilter && this.options.dropdownFilter instanceof Object) {
+                if (!Array.isArray(this.options.dropdownFilter)) {
+                    this.options.dropdownFilter = [this.options.dropdownFilter];
+                }
+                for (var i = 0, ii = this.options.dropdownFilter.length; i < ii; ++i) {
+                    this.dropdownFilter[this.options.dropdownFilter[i].value ? 'static' : 'dynamic'].push(this.options.dropdownFilter[i]);
+                }
+            }
+
+            if (this.options.dynamicFilter && !Array.isArray(this.options.dynamicFilter)) {
+                this.options.dynamicFilter = [this.options.dynamicFilter];
+            }
+
+            if (this.options.accent) {
+                if (typeof this.options.accent === "object") {
+                    if (this.options.accent.from && this.options.accent.to && this.options.accent.from.length === this.options.accent.to.length) {
+
+                    }
+                    // {debug}
+                    else {
+                        if (this.options.debug) {
+                            _debug.log({
+                                'node': this.selector,
+                                'function': 'extendOptions()',
+                                'message': 'Invalid "options.accent", from and to must be defined and same length.'
+                            });
+
+                            _debug.print();
+                        }
+                    }
+                    // {/debug}
+                } else {
+                    this.options.accent = _accent;
+                }
+            }
+
+            if (this.options.groupTemplate) {
+                this.groupTemplate = this.options.groupTemplate;
+            }
+
+            if (this.options.resultContainer) {
+                if (typeof this.options.resultContainer === "string") {
+                    this.options.resultContainer = $(this.options.resultContainer);
+                }
+
+                if (!(this.options.resultContainer instanceof $) || !this.options.resultContainer[0]) {
+                    // {debug}
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'extendOptions()',
+                            'message': 'Invalid jQuery selector or jQuery Object for "options.resultContainer".'
+                        });
+
+                        _debug.print();
+                    }
+                    // {/debug}
+                } else {
+                    this.resultContainer = this.options.resultContainer;
+                }
+            }
+
+            if (this.options.maxItemPerGroup && this.options.group && this.options.group.key) {
+                this.groupBy = this.options.group.key;
+            }
+
+            // Compatibility onClick callback
+            if (this.options.callback && this.options.callback.onClick) {
+                this.options.callback.onClickBefore = this.options.callback.onClick;
+                delete this.options.callback.onClick;
+            }
+
+            // Compatibility onNavigate callback
+            if (this.options.callback && this.options.callback.onNavigate) {
+                this.options.callback.onNavigateBefore = this.options.callback.onNavigate;
+                delete this.options.callback.onNavigate;
+            }
+

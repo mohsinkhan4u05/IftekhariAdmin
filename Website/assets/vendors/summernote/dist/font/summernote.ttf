@@ -1,0 +1,490 @@
+        }
+            if (options.debug && $.inArray(options.debug, _supported.debug !== -1)) {
+                tpmOptions.debug = options.debug;
+            }
+            if (tpmOptions.dynamic.settings.trigger) {
+                if (tpmOptions.dynamic.settings.trigger === "keypress" && tpmOptions.submit.settings.clear === "keypress") {
+                    tpmOptions.dynamic.settings.trigger = "keydown";
+                }
+            }
+
+            options = tpmOptions;
+
+        }
+
+        function delegateDynamicValidation() {
+
+            if (!options.dynamic.settings.trigger) {
+                return false;
+            }
+            options.debug && window.Debug.log({
+                'node': node,
+                'function': 'delegateDynamicValidation()',
+                'message': 'OK - Dynamic Validation activated on ' + node.length + ' form(s)'
+            });
+
+            if (!node.find('[' + _data.validation + '],[' + _data.regex + ']')[0]) {
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'delegateDynamicValidation()',
+                    'arguments': 'node.find([' + _data.validation + '],[' + _data.regex + '])',
+                    'message': 'ERROR - [' + _data.validation + '] not found'
+                });
+
+                return false;
+            }
+
+            var event = options.dynamic.settings.trigger + delegateSuffix;
+            if (options.dynamic.settings.trigger !== "focusout") {
+                event += " change" + delegateSuffix + " paste" + delegateSuffix;
+            }
+
+            $.each(
+                node.find('[' + _data.validation + '],[' + _data.regex + ']'),
+                function(index, input) {
+
+                    $(input).unbind(event).on(event, function(e) {
+
+                        if ($(this).is(':disabled')) {
+                            return false;
+                        }
+
+                        var input = this,
+                            keyCode = e.keyCode || null;
+
+                        _typeWatch(function() {
+
+                            if (!validateInput(input)) {
+
+                                displayOneError(input.name);
+                                _executeCallback(options.dynamic.callback.onError, [node, input, keyCode, errors[input.name]]);
+
+                            } else {
+
+                                _executeCallback(options.dynamic.callback.onSuccess, [node, input, keyCode]);
+
+                            }
+
+                            _executeCallback(options.dynamic.callback.onComplete, [node, input, keyCode]);
+
+                        }, options.dynamic.settings.delay);
+
+                    });
+                }
+            );
+        }
+
+        function delegateValidation() {
+
+            _executeCallback(options.submit.callback.onInit, [node]);
+
+            var event = options.submit.settings.trigger + '.vd';
+            options.debug && window.Debug.log({
+                'node': node,
+                'function': 'delegateValidation()',
+                'message': 'OK - Validation activated on ' + node.length + ' form(s)'
+            });
+
+            if (!node.find(options.submit.settings.button)[0]) {
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'delegateValidation()',
+                    'arguments': '{button: ' + options.submit.settings.button + '}',
+                    'message': 'ERROR - node.find("' + options.submit.settings.button + '") not found'
+                });
+
+                return false;
+
+            }
+
+            node.on("submit", false);
+            node.find(options.submit.settings.button).off('.vd').on(event, function(e) {
+
+                e.preventDefault();
+
+                resetErrors();
+
+                _executeCallback(options.submit.callback.onValidate, [node]);
+
+                if (!validateForm()) {
+
+                    displayErrors();
+                    _executeCallback(options.submit.callback.onError, [node, errors, formData]);
+
+                } else {
+
+                    _executeCallback(options.submit.callback.onBeforeSubmit, [node]);
+
+                    (options.submit.callback.onSubmit) ? _executeCallback(options.submit.callback.onSubmit, [node, formData]): submitForm();
+
+                    _executeCallback(options.submit.callback.onAfterSubmit, [node]);
+
+                }
+                options.debug && window.Debug.print();
+
+                return false;
+
+            });
+
+        }
+
+        function validateForm() {
+
+            var isValid = isEmpty(errors);
+
+            formData = {};
+
+            $.each(
+                node.find('input:not([type="submit"]), select, textarea').not(':disabled'),
+                function(index, input) {
+
+                    input = $(input);
+
+                    var value = _getInputValue(input[0]),
+                        inputName = input.attr('name');
+
+                    if (inputName) {
+                        if (/\[]$/.test(inputName)) {
+                            inputName = inputName.replace(/\[]$/, '');
+                            if (!(formData[inputName] instanceof Array)) {
+                                formData[inputName] = [];
+                            }
+                            formData[inputName].push(value)
+                        } else {
+                            formData[inputName] = value;
+                        }
+                    }
+
+                    if (!!input.attr(_data.validation) || !!input.attr(_data.regex)) {
+                        if (!validateInput(input[0], value)) {
+                            isValid = false;
+                        }
+                    }
+                }
+            );
+
+            prepareFormData();
+
+            return isValid;
+
+        }
+
+        function prepareFormData() {
+
+            var data = {},
+                matches,
+                index;
+
+            for (var i in formData) {
+                if (!formData.hasOwnProperty(i)) continue;
+
+                index = 0;
+                matches = i.split(/\[(.+?)]/g);
+
+                var tmpObject = {},
+                    tmpArray = [];
+
+                for (var k = matches.length - 1; k >= 0; k--) {
+                    if (matches[k] === "") {
+                        matches.splice(k, 1);
+                        continue;
+                    }
+
+                    if (tmpArray.length < 1) {
+                        tmpObject[matches[k]] = Number(formData[i]) || formData[i];
+                    } else {
+                        tmpObject = {};
+                        tmpObject[matches[k]] = tmpArray[tmpArray.length - 1];
+                    }
+                    tmpArray.push(tmpObject)
+
+                }
+
+                data = $.extend(true, data, tmpObject);
+
+            }
+
+            formData = data;
+
+        }
+
+        function validateInput(input, value) {
+
+            var inputName = $(input).attr('name'),
+                value = value || _getInputValue(input);
+
+            if (!inputName) {
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'validateInput()',
+                    'arguments': '$(input).attr("name")',
+                    'message': 'ERROR - Missing input [name]'
+                });
+
+                return false;
+            }
+
+            var matches = inputName.replace(/]$/, '').split(/]\[|[[\]]/g),
+                inputShortName = window.Validation.labels[inputName] ||
+                options.labels[inputName] ||
+                $(input).attr(_data.label) ||
+                matches[matches.length - 1],
+
+                validationArray = $(input).attr(_data.validation),
+                validationMessage = $(input).attr(_data.validationMessage),
+                validationRegex = $(input).attr(_data.regex),
+                validationRegexReverse = !($(input).attr(_data.regexReverse) === undefined),
+                validationRegexMessage = $(input).attr(_data.regexMessage),
+
+                validateOnce = false;
+
+            if (validationArray) {
+                validationArray = _api._splitValidation(validationArray);
+            }
+            if (validationArray instanceof Array && validationArray.length > 0) {
+                if ($.trim(value) === '' && ~validationArray.indexOf('OPTIONAL')) {
+                    return true;
+                }
+
+                $.each(validationArray, function(i, rule) {
+
+                    if (validateOnce === true) {
+                        return true;
+                    }
+
+                    try {
+
+                        validateRule(value, rule);
+
+                    } catch (error) {
+
+                        if (validationMessage || !options.submit.settings.allErrors) {
+                            validateOnce = true;
+                        }
+
+                        error[0] = validationMessage || error[0];
+
+                        registerError(inputName, error[0].replace('$', inputShortName).replace('%', error[1]));
+
+                    }
+
+                });
+
+            }
+            if (validationRegex) {
+
+                var rule = _buildRegexFromString(validationRegex);
+                if (!(rule instanceof RegExp)) {
+                    return true;
+                }
+
+                try {
+
+                    validateRule(value, rule, validationRegexReverse);
+
+                } catch (error) {
+
+                    error[0] = validationRegexMessage || error[0];
+
+                    registerError(inputName, error[0].replace('$', inputShortName));
+
+                }
+
+            }
+
+            return !errors[inputName] || errors[inputName] instanceof Array && errors[inputName].length === 0;
+
+        }
+
+        function validateRule(value, rule, reversed) {
+            if (rule instanceof RegExp) {
+                var isValid = rule.test(value);
+
+                if (reversed) {
+                    isValid = !isValid;
+                }
+
+                if (!isValid) {
+                    throw [options.messages['default'], ''];
+                }
+                return;
+            }
+
+            if (options.rules[rule]) {
+                if (!options.rules[rule].test(value)) {
+                    throw [options.messages[rule], ''];
+                }
+                return;
+            }
+            var comparison = rule.match(options.rules.COMPARISON);
+
+            if (!comparison || comparison.length !== 4) {
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'validateRule()',
+                    'arguments': 'value: ' + value + ' rule: ' + rule,
+                    'message': 'WARNING - Invalid comparison'
+                });
+
+                return;
+            }
+
+            var type = comparison[1],
+                operator = comparison[2],
+                compared = comparison[3],
+                comparedValue;
+
+            switch (type) {
+                case "L":
+                    if (isNaN(compared)) {
+                        options.debug && window.Debug.log({
+                            'node': node,
+                            'function': 'validateRule()',
+                            'arguments': 'compare: ' + compared + ' rule: ' + rule,
+                            'message': 'WARNING - Invalid rule, "L" compare must be numeric'
+                        });
+
+                        return false;
+
+                    } else {
+
+                        if (!value || eval(value.length + operator + parseFloat(compared)) === false) {
+                            throw [options.messages[operator], compared];
+                        }
+
+                    }
+
+                    break;
+                case "V":
+                default:
+                    if (isNaN(compared)) {
+
+                        comparedValue = node.find('[name="' + compared + '"]').val();
+                        if (!comparedValue) {
+                            options.debug && window.Debug.log({
+                                'node': node,
+                                'function': 'validateRule()',
+                                'arguments': 'compare: ' + compared + ' rule: ' + rule,
+                                'message': 'WARNING - Unable to find compared field [name="' + compared + '"]'
+                            });
+
+                            return false;
+                        }
+
+                        if (!value || !eval('"' + encodeURIComponent(value) + '"' + operator + '"' + encodeURIComponent(comparedValue) + '"')) {
+                            throw [options.messages[operator].replace(' characters', ''), compared];
+                        }
+
+                    } else {
+                        if (!value || isNaN(value) || !eval(value + operator + parseFloat(compared))) {
+                            throw [options.messages[operator].replace(' characters', ''), compared];
+                        }
+
+                    }
+                    break;
+
+            }
+
+        }
+
+        function registerError(inputName, error) {
+
+            if (!errors[inputName]) {
+                errors[inputName] = [];
+            }
+
+            error = error.capitalize();
+
+            var hasError = false;
+            for (var i = 0; i < errors[inputName].length; i++) {
+                if (errors[inputName][i] === error) {
+                    hasError = true;
+                    break;
+                }
+            }
+
+            if (!hasError) {
+                errors[inputName].push(error);
+            }
+
+        }
+
+        function displayOneError(inputName) {
+
+            var input,
+                inputId,
+                errorContainer,
+                label,
+                html = '<div class="' + options.submit.settings.errorListClass + '" ' + _data.errorList + '><ul></ul></div>',
+                group,
+                groupInput;
+
+            if (!errors.hasOwnProperty(inputName)) {
+                return false;
+            }
+
+            input = node.find('[name="' + inputName + '"]');
+
+            label = null;
+
+            if (!input[0]) {
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'displayOneError()',
+                    'arguments': '[name="' + inputName + '"]',
+                    'message': 'ERROR - Unable to find input by name "' + inputName + '"'
+                });
+
+                return false;
+            }
+
+            group = input.attr(_data.group);
+
+            if (group) {
+
+                groupInput = node.find('[name="' + inputName + '"]');
+                label = node.find('[id="' + group + '"]');
+
+                if (label[0]) {
+                    label.addClass(options.submit.settings.errorClass);
+                    errorContainer = label;
+                }
+
+            } else {
+
+                input.addClass(options.submit.settings.errorClass);
+
+                if (options.submit.settings.inputContainer) {
+                    input.parentsUntil(node, options.submit.settings.inputContainer).addClass(options.submit.settings.errorClass);
+                }
+
+                inputId = input.attr('id');
+
+                if (inputId) {
+                    label = node.find('label[for="' + inputId + '"]')[0];
+                }
+
+                if (!label) {
+                    label = input.parentsUntil(node, 'label')[0];
+                }
+
+                if (label) {
+                    label = $(label);
+                    label.addClass(options.submit.settings.errorClass);
+                }
+            }
+
+            if (options.submit.settings.display === 'inline') {
+                if (options.submit.settings.errorListContainer) {
+                    errorContainer = input.parentsUntil(node, options.submit.settings.errorListContainer);
+                } else {
+                    errorContainer = errorContainer || input.parent();
+                }
+            } else if (options.submit.settings.display === 'block') {
+                errorContainer = node;
+            }
+            if (options.submit.settings.display === 'inline' && errorContainer.find('[' + _data.errorList + ']')[0]) {
+                return false;
+            }
+
+            if (options.submit.settings.

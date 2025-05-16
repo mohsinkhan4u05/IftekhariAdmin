@@ -1,0 +1,367 @@
+{ a = a; },
+		Two: function( a, b ) { a = a; b = b; }
+	};
+	callback = function( v, k ) {
+		equal( k, "foo", label + "-argument function treated like object" );
+	};
+	for ( i in result ) {
+		label = i;
+		result[ i ].foo = "bar";
+		jQuery.map( result[ i ], callback );
+	}
+
+	result = {
+		"undefined": undefined,
+		"null": null,
+		"false": false,
+		"true": true,
+		"empty string": "",
+		"nonempty string": "string",
+		"string \"0\"": "0",
+		"negative": -1,
+		"excess": 1
+	};
+	callback = function( v, k ) {
+		equal( k, "length", "Object with " + label + " length treated like object" );
+	};
+	for ( i in result ) {
+		label = i;
+		jQuery.map( { length: result[ i ] }, callback );
+	}
+
+	result = {
+		"sparse Array": Array( 4 ),
+		"length: 1 plain object": { length: 1, "0": true },
+		"length: 2 plain object": { length: 2, "0": true, "1": true },
+		NodeList: document.getElementsByTagName("html")
+	};
+	callback = function( v, k ) {
+		if ( result[ label ] ) {
+			delete result[ label ];
+			equal( k, "0", label + " treated like array" );
+		}
+	};
+	for ( i in result ) {
+		label = i;
+		jQuery.map( result[ i ], callback );
+	}
+
+	result = false;
+	jQuery.map( { length: 0 }, function() {
+		result = true;
+	});
+	ok( !result, "length: 0 plain object treated like array" );
+
+	result = false;
+	jQuery.map( document.getElementsByTagName("asdf"), function() {
+		result = true;
+	});
+	ok( !result, "empty NodeList treated like array" );
+
+	result = jQuery.map( Array(4), function( v, k ){
+		return k % 2 ? k : [k,k,k];
+	});
+	equal( result.join(""), "00012223", "Array results flattened (#2616)" );
+});
+
+test("jQuery.merge()", function() {
+	expect(8);
+
+	deepEqual( jQuery.merge([],[]), [], "Empty arrays" );
+
+	deepEqual( jQuery.merge([ 1 ],[ 2 ]), [ 1, 2 ], "Basic" );
+	deepEqual( jQuery.merge([ 1, 2 ], [ 3, 4 ]), [ 1, 2, 3, 4 ], "Basic" );
+
+	deepEqual( jQuery.merge([ 1, 2 ],[]), [ 1, 2 ], "Second empty" );
+	deepEqual( jQuery.merge([],[ 1, 2 ]), [ 1, 2 ], "First empty" );
+
+	// Fixed at [5998], #3641
+	deepEqual( jQuery.merge([ -2, -1 ], [ 0, 1, 2 ]), [ -2, -1 , 0, 1, 2 ],
+		"Second array including a zero (falsy)");
+
+	// After fixing #5527
+	deepEqual( jQuery.merge([], [ null, undefined ]), [ null, undefined ],
+		"Second array including null and undefined values");
+	deepEqual( jQuery.merge({ length: 0 }, [ 1, 2 ] ), { length: 2, 0: 1, 1: 2},
+		"First array like");
+});
+
+test("jQuery.extend(Object, Object)", function() {
+	expect(28);
+
+	var empty, optionsWithLength, optionsWithDate, myKlass,
+		customObject, optionsWithCustomObject, MyNumber, ret,
+		nullUndef, target, recursive, obj,
+		defaults, defaultsCopy, options1, options1Copy, options2, options2Copy, merged2,
+		settings = { "xnumber1": 5, "xnumber2": 7, "xstring1": "peter", "xstring2": "pan" },
+		options = { "xnumber2": 1, "xstring2": "x", "xxx": "newstring" },
+		optionsCopy = { "xnumber2": 1, "xstring2": "x", "xxx": "newstring" },
+		merged = { "xnumber1": 5, "xnumber2": 1, "xstring1": "peter", "xstring2": "x", "xxx": "newstring" },
+		deep1 = { "foo": { "bar": true } },
+		deep2 = { "foo": { "baz": true }, "foo2": document },
+		deep2copy = { "foo": { "baz": true }, "foo2": document },
+		deepmerged = { "foo": { "bar": true, "baz": true }, "foo2": document },
+		arr = [1, 2, 3],
+		nestedarray = { "arr": arr };
+
+	jQuery.extend(settings, options);
+	deepEqual( settings, merged, "Check if extended: settings must be extended" );
+	deepEqual( options, optionsCopy, "Check if not modified: options must not be modified" );
+
+	jQuery.extend(settings, null, options);
+	deepEqual( settings, merged, "Check if extended: settings must be extended" );
+	deepEqual( options, optionsCopy, "Check if not modified: options must not be modified" );
+
+	jQuery.extend(true, deep1, deep2);
+	deepEqual( deep1["foo"], deepmerged["foo"], "Check if foo: settings must be extended" );
+	deepEqual( deep2["foo"], deep2copy["foo"], "Check if not deep2: options must not be modified" );
+	equal( deep1["foo2"], document, "Make sure that a deep clone was not attempted on the document" );
+
+	ok( jQuery.extend(true, {}, nestedarray)["arr"] !== arr, "Deep extend of object must clone child array" );
+
+	// #5991
+	ok( jQuery.isArray( jQuery.extend(true, { "arr": {} }, nestedarray)["arr"] ), "Cloned array have to be an Array" );
+	ok( jQuery.isPlainObject( jQuery.extend(true, { "arr": arr }, { "arr": {} })["arr"] ), "Cloned object have to be an plain object" );
+
+	empty = {};
+	optionsWithLength = { "foo": { "length": -1 } };
+	jQuery.extend(true, empty, optionsWithLength);
+	deepEqual( empty["foo"], optionsWithLength["foo"], "The length property must copy correctly" );
+
+	empty = {};
+	optionsWithDate = { "foo": { "date": new Date() } };
+	jQuery.extend(true, empty, optionsWithDate);
+	deepEqual( empty["foo"], optionsWithDate["foo"], "Dates copy correctly" );
+
+	/** @constructor */
+	myKlass = function() {};
+	customObject = new myKlass();
+	optionsWithCustomObject = { "foo": { "date": customObject } };
+	empty = {};
+	jQuery.extend(true, empty, optionsWithCustomObject);
+	ok( empty["foo"] && empty["foo"]["date"] === customObject, "Custom objects copy correctly (no methods)" );
+
+	// Makes the class a little more realistic
+	myKlass.prototype = { "someMethod": function(){} };
+	empty = {};
+	jQuery.extend(true, empty, optionsWithCustomObject);
+	ok( empty["foo"] && empty["foo"]["date"] === customObject, "Custom objects copy correctly" );
+
+	MyNumber = Number;
+
+	ret = jQuery.extend(true, { "foo": 4 }, { "foo": new MyNumber(5) } );
+	ok( parseInt(ret.foo, 10) === 5, "Wrapped numbers copy correctly" );
+
+	nullUndef;
+	nullUndef = jQuery.extend({}, options, { "xnumber2": null });
+	ok( nullUndef["xnumber2"] === null, "Check to make sure null values are copied");
+
+	nullUndef = jQuery.extend({}, options, { "xnumber2": undefined });
+	ok( nullUndef["xnumber2"] === options["xnumber2"], "Check to make sure undefined values are not copied");
+
+	nullUndef = jQuery.extend({}, options, { "xnumber0": null });
+	ok( nullUndef["xnumber0"] === null, "Check to make sure null values are inserted");
+
+	target = {};
+	recursive = { foo:target, bar:5 };
+	jQuery.extend(true, target, recursive);
+	deepEqual( target, { bar:5 }, "Check to make sure a recursive obj doesn't go never-ending loop by not copying it over" );
+
+	ret = jQuery.extend(true, { foo: [] }, { foo: [0] } ); // 1907
+	equal( ret.foo.length, 1, "Check to make sure a value with coercion 'false' copies over when necessary to fix #1907" );
+
+	ret = jQuery.extend(true, { foo: "1,2,3" }, { foo: [1, 2, 3] } );
+	ok( typeof ret.foo !== "string", "Check to make sure values equal with coercion (but not actually equal) overwrite correctly" );
+
+	ret = jQuery.extend(true, { foo:"bar" }, { foo:null } );
+	ok( typeof ret.foo !== "undefined", "Make sure a null value doesn't crash with deep extend, for #1908" );
+
+	obj = { foo:null };
+	jQuery.extend(true, obj, { foo:"notnull" } );
+	equal( obj.foo, "notnull", "Make sure a null value can be overwritten" );
+
+	function func() {}
+	jQuery.extend(func, { key: "value" } );
+	equal( func.key, "value", "Verify a function can be extended" );
+
+	defaults = { xnumber1: 5, xnumber2: 7, xstring1: "peter", xstring2: "pan" };
+	defaultsCopy = { xnumber1: 5, xnumber2: 7, xstring1: "peter", xstring2: "pan" };
+	options1 = { xnumber2: 1, xstring2: "x" };
+	options1Copy = { xnumber2: 1, xstring2: "x" };
+	options2 = { xstring2: "xx", xxx: "newstringx" };
+	options2Copy = { xstring2: "xx", xxx: "newstringx" };
+	merged2 = { xnumber1: 5, xnumber2: 1, xstring1: "peter", xstring2: "xx", xxx: "newstringx" };
+
+	settings = jQuery.extend({}, defaults, options1, options2);
+	deepEqual( settings, merged2, "Check if extended: settings must be extended" );
+	deepEqual( defaults, defaultsCopy, "Check if not modified: options1 must not be modified" );
+	deepEqual( options1, options1Copy, "Check if not modified: options1 must not be modified" );
+	deepEqual( options2, options2Copy, "Check if not modified: options2 must not be modified" );
+});
+
+test("jQuery.each(Object,Function)", function() {
+	expect( 23 );
+
+	var i, label, seen, callback;
+
+	seen = {};
+	jQuery.each( [ 3, 4, 5 ], function( k, v ) {
+		seen[ k ] = v;
+	});
+	deepEqual( seen, { "0": 3, "1": 4, "2": 5 }, "Array iteration" );
+
+	seen = {};
+	jQuery.each( { name: "name", lang: "lang" }, function( k, v ) {
+		seen[ k ] = v;
+	});
+	deepEqual( seen, { name: "name", lang: "lang" }, "Object iteration" );
+
+	seen = [];
+	jQuery.each( [ 1, 2, 3 ], function( k, v ) {
+		seen.push( v );
+		if ( k === 1 ) {
+			return false;
+		}
+	});
+	deepEqual( seen, [ 1, 2 ] , "Broken array iteration" );
+
+	seen = [];
+	jQuery.each( {"a": 1, "b": 2,"c": 3 }, function( k, v ) {
+		seen.push( v );
+		return false;
+	});
+	deepEqual( seen, [ 1 ], "Broken object iteration" );
+
+	seen = {
+		Zero: function() {},
+		One: function( a ) { a = a; },
+		Two: function( a, b ) { a = a; b = b; }
+	};
+	callback = function( k ) {
+		equal( k, "foo", label + "-argument function treated like object" );
+	};
+	for ( i in seen ) {
+		label = i;
+		seen[ i ].foo = "bar";
+		jQuery.each( seen[ i ], callback );
+	}
+
+	seen = {
+		"undefined": undefined,
+		"null": null,
+		"false": false,
+		"true": true,
+		"empty string": "",
+		"nonempty string": "string",
+		"string \"0\"": "0",
+		"negative": -1,
+		"excess": 1
+	};
+	callback = function( k ) {
+		equal( k, "length", "Object with " + label + " length treated like object" );
+	};
+	for ( i in seen ) {
+		label = i;
+		jQuery.each( { length: seen[ i ] }, callback );
+	}
+
+	seen = {
+		"sparse Array": Array( 4 ),
+		"length: 1 plain object": { length: 1, "0": true },
+		"length: 2 plain object": { length: 2, "0": true, "1": true },
+		NodeList: document.getElementsByTagName("html")
+	};
+	callback = function( k ) {
+		if ( seen[ label ] ) {
+			delete seen[ label ];
+			equal( k, "0", label + " treated like array" );
+			return false;
+		}
+	};
+	for ( i in seen ) {
+		label = i;
+		jQuery.each( seen[ i ], callback );
+	}
+
+	seen = false;
+	jQuery.each( { length: 0 }, function() {
+		seen = true;
+	});
+	ok( !seen, "length: 0 plain object treated like array" );
+
+	seen = false;
+	jQuery.each( document.getElementsByTagName("asdf"), function() {
+		seen = true;
+	});
+	ok( !seen, "empty NodeList treated like array" );
+
+	i = 0;
+	jQuery.each( document.styleSheets, function() {
+		i++;
+	});
+	equal( i, 2, "Iteration over document.styleSheets" );
+});
+
+test("jQuery.makeArray", function(){
+	expect(15);
+
+	equal( jQuery.makeArray(jQuery("html>*"))[0].nodeName.toUpperCase(), "HEAD", "Pass makeArray a jQuery object" );
+
+	equal( jQuery.makeArray(document.getElementsByName("PWD")).slice(0,1)[0].name, "PWD", "Pass makeArray a nodelist" );
+
+	equal( (function() { return jQuery.makeArray(arguments); })(1,2).join(""), "12", "Pass makeArray an arguments array" );
+
+	equal( jQuery.makeArray([1,2,3]).join(""), "123", "Pass makeArray a real array" );
+
+	equal( jQuery.makeArray().length, 0, "Pass nothing to makeArray and expect an empty array" );
+
+	equal( jQuery.makeArray( 0 )[0], 0 , "Pass makeArray a number" );
+
+	equal( jQuery.makeArray( "foo" )[0], "foo", "Pass makeArray a string" );
+
+	equal( jQuery.makeArray( true )[0].constructor, Boolean, "Pass makeArray a boolean" );
+
+	equal( jQuery.makeArray( document.createElement("div") )[0].nodeName.toUpperCase(), "DIV", "Pass makeArray a single node" );
+
+	equal( jQuery.makeArray( {length:2, 0:"a", 1:"b"} ).join(""), "ab", "Pass makeArray an array like map (with length)" );
+
+	ok( !!jQuery.makeArray( document.documentElement.childNodes ).slice(0,1)[0].nodeName, "Pass makeArray a childNodes array" );
+
+	// function, is tricky as it has length
+	equal( jQuery.makeArray( function(){ return 1;} )[0](), 1, "Pass makeArray a function" );
+
+	//window, also has length
+	equal( jQuery.makeArray(window)[0], window, "Pass makeArray the window" );
+
+	equal( jQuery.makeArray(/a/)[0].constructor, RegExp, "Pass makeArray a regex" );
+
+	// Some nodes inherit traits of nodelists
+	ok( jQuery.makeArray(document.getElementById("form")).length >= 13,
+		"Pass makeArray a form (treat as elements)" );
+});
+
+test("jQuery.inArray", function(){
+	expect(3);
+
+	equal( jQuery.inArray( 0, false ), -1 , "Search in 'false' as array returns -1 and doesn't throw exception" );
+
+	equal( jQuery.inArray( 0, null ), -1 , "Search in 'null' as array returns -1 and doesn't throw exception" );
+
+	equal( jQuery.inArray( 0, undefined ), -1 , "Search in 'undefined' as array returns -1 and doesn't throw exception" );
+});
+
+test("jQuery.isEmptyObject", function(){
+	expect(2);
+
+	equal(true, jQuery.isEmptyObject({}), "isEmptyObject on empty object literal" );
+	equal(false, jQuery.isEmptyObject({a:1}), "isEmptyObject on non-empty object literal" );
+
+	// What about this ?
+	// equal(true, jQuery.isEmptyObject(null), "isEmptyObject on null" );
+});
+
+test("jQuery.proxy", function(){
+	expect( 9 );
+
+	var test2, test3, test4, fn, cb,
+		test = function(){ equal( this, thisObject, "M

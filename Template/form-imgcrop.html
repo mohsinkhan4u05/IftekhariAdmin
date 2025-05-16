@@ -1,0 +1,1057 @@
+o[0].style.left = this.coords.p_to_fake + "%";
+
+                    if (this.old_from !== this.result.from || this.force_redraw) {
+                        this.$cache.from[0].style.left = this.labels.p_from_left + "%";
+                    }
+                    if (this.old_to !== this.result.to || this.force_redraw) {
+                        this.$cache.to[0].style.left = this.labels.p_to_left + "%";
+                    }
+
+                    this.$cache.single[0].style.left = this.labels.p_single_left + "%";
+                }
+
+                this.writeToInput();
+
+                if ((this.old_from !== this.result.from || this.old_to !== this.result.to) && !this.is_start) {
+                    this.$cache.input.trigger("change");
+                    this.$cache.input.trigger("input");
+                }
+
+                this.old_from = this.result.from;
+                this.old_to = this.result.to;
+
+                // callbacks call
+                if (!this.is_resize && !this.is_update && !this.is_start && !this.is_finish) {
+                    this.callOnChange();
+                }
+                if (this.is_key || this.is_click) {
+                    this.is_key = false;
+                    this.is_click = false;
+                    this.callOnFinish();
+                }
+
+                this.is_update = false;
+                this.is_resize = false;
+                this.is_finish = false;
+            }
+
+            this.is_start = false;
+            this.is_key = false;
+            this.is_click = false;
+            this.force_redraw = false;
+        },
+
+        /**
+         * Draw labels
+         * measure labels collisions
+         * collapse close labels
+         */
+        drawLabels: function () {
+            if (!this.options) {
+                return;
+            }
+
+            var values_num = this.options.values.length;
+            var p_values = this.options.p_values;
+            var text_single;
+            var text_from;
+            var text_to;
+            var from_pretty;
+            var to_pretty;
+
+            if (this.options.hide_from_to) {
+                return;
+            }
+
+            if (this.options.type === "single") {
+
+                if (values_num) {
+                    text_single = this.decorate(p_values[this.result.from]);
+                    this.$cache.single.html(text_single);
+                } else {
+                    from_pretty = this._prettify(this.result.from);
+
+                    text_single = this.decorate(from_pretty, this.result.from);
+                    this.$cache.single.html(text_single);
+                }
+
+                this.calcLabels();
+
+                if (this.labels.p_single_left < this.labels.p_min + 1) {
+                    this.$cache.min[0].style.visibility = "hidden";
+                } else {
+                    this.$cache.min[0].style.visibility = "visible";
+                }
+
+                if (this.labels.p_single_left + this.labels.p_single_fake > 100 - this.labels.p_max - 1) {
+                    this.$cache.max[0].style.visibility = "hidden";
+                } else {
+                    this.$cache.max[0].style.visibility = "visible";
+                }
+
+            } else {
+
+                if (values_num) {
+
+                    if (this.options.decorate_both) {
+                        text_single = this.decorate(p_values[this.result.from]);
+                        text_single += this.options.values_separator;
+                        text_single += this.decorate(p_values[this.result.to]);
+                    } else {
+                        text_single = this.decorate(p_values[this.result.from] + this.options.values_separator + p_values[this.result.to]);
+                    }
+                    text_from = this.decorate(p_values[this.result.from]);
+                    text_to = this.decorate(p_values[this.result.to]);
+
+                    this.$cache.single.html(text_single);
+                    this.$cache.from.html(text_from);
+                    this.$cache.to.html(text_to);
+
+                } else {
+                    from_pretty = this._prettify(this.result.from);
+                    to_pretty = this._prettify(this.result.to);
+
+                    if (this.options.decorate_both) {
+                        text_single = this.decorate(from_pretty, this.result.from);
+                        text_single += this.options.values_separator;
+                        text_single += this.decorate(to_pretty, this.result.to);
+                    } else {
+                        text_single = this.decorate(from_pretty + this.options.values_separator + to_pretty, this.result.to);
+                    }
+                    text_from = this.decorate(from_pretty, this.result.from);
+                    text_to = this.decorate(to_pretty, this.result.to);
+
+                    this.$cache.single.html(text_single);
+                    this.$cache.from.html(text_from);
+                    this.$cache.to.html(text_to);
+
+                }
+
+                this.calcLabels();
+
+                var min = Math.min(this.labels.p_single_left, this.labels.p_from_left),
+                    single_left = this.labels.p_single_left + this.labels.p_single_fake,
+                    to_left = this.labels.p_to_left + this.labels.p_to_fake,
+                    max = Math.max(single_left, to_left);
+
+                if (this.labels.p_from_left + this.labels.p_from_fake >= this.labels.p_to_left) {
+                    this.$cache.from[0].style.visibility = "hidden";
+                    this.$cache.to[0].style.visibility = "hidden";
+                    this.$cache.single[0].style.visibility = "visible";
+
+                    if (this.result.from === this.result.to) {
+                        if (this.target === "from") {
+                            this.$cache.from[0].style.visibility = "visible";
+                        } else if (this.target === "to") {
+                            this.$cache.to[0].style.visibility = "visible";
+                        } else if (!this.target) {
+                            this.$cache.from[0].style.visibility = "visible";
+                        }
+                        this.$cache.single[0].style.visibility = "hidden";
+                        max = to_left;
+                    } else {
+                        this.$cache.from[0].style.visibility = "hidden";
+                        this.$cache.to[0].style.visibility = "hidden";
+                        this.$cache.single[0].style.visibility = "visible";
+                        max = Math.max(single_left, to_left);
+                    }
+                } else {
+                    this.$cache.from[0].style.visibility = "visible";
+                    this.$cache.to[0].style.visibility = "visible";
+                    this.$cache.single[0].style.visibility = "hidden";
+                }
+
+                if (min < this.labels.p_min + 1) {
+                    this.$cache.min[0].style.visibility = "hidden";
+                } else {
+                    this.$cache.min[0].style.visibility = "visible";
+                }
+
+                if (max > 100 - this.labels.p_max - 1) {
+                    this.$cache.max[0].style.visibility = "hidden";
+                } else {
+                    this.$cache.max[0].style.visibility = "visible";
+                }
+
+            }
+        },
+
+        /**
+         * Draw shadow intervals
+         */
+        drawShadow: function () {
+            var o = this.options,
+                c = this.$cache,
+
+                is_from_min = typeof o.from_min === "number" && !isNaN(o.from_min),
+                is_from_max = typeof o.from_max === "number" && !isNaN(o.from_max),
+                is_to_min = typeof o.to_min === "number" && !isNaN(o.to_min),
+                is_to_max = typeof o.to_max === "number" && !isNaN(o.to_max),
+
+                from_min,
+                from_max,
+                to_min,
+                to_max;
+
+            if (o.type === "single") {
+                if (o.from_shadow && (is_from_min || is_from_max)) {
+                    from_min = this.convertToPercent(is_from_min ? o.from_min : o.min);
+                    from_max = this.convertToPercent(is_from_max ? o.from_max : o.max) - from_min;
+                    from_min = this.toFixed(from_min - (this.coords.p_handle / 100 * from_min));
+                    from_max = this.toFixed(from_max - (this.coords.p_handle / 100 * from_max));
+                    from_min = from_min + (this.coords.p_handle / 2);
+
+                    c.shad_single[0].style.display = "block";
+                    c.shad_single[0].style.left = from_min + "%";
+                    c.shad_single[0].style.width = from_max + "%";
+                } else {
+                    c.shad_single[0].style.display = "none";
+                }
+            } else {
+                if (o.from_shadow && (is_from_min || is_from_max)) {
+                    from_min = this.convertToPercent(is_from_min ? o.from_min : o.min);
+                    from_max = this.convertToPercent(is_from_max ? o.from_max : o.max) - from_min;
+                    from_min = this.toFixed(from_min - (this.coords.p_handle / 100 * from_min));
+                    from_max = this.toFixed(from_max - (this.coords.p_handle / 100 * from_max));
+                    from_min = from_min + (this.coords.p_handle / 2);
+
+                    c.shad_from[0].style.display = "block";
+                    c.shad_from[0].style.left = from_min + "%";
+                    c.shad_from[0].style.width = from_max + "%";
+                } else {
+                    c.shad_from[0].style.display = "none";
+                }
+
+                if (o.to_shadow && (is_to_min || is_to_max)) {
+                    to_min = this.convertToPercent(is_to_min ? o.to_min : o.min);
+                    to_max = this.convertToPercent(is_to_max ? o.to_max : o.max) - to_min;
+                    to_min = this.toFixed(to_min - (this.coords.p_handle / 100 * to_min));
+                    to_max = this.toFixed(to_max - (this.coords.p_handle / 100 * to_max));
+                    to_min = to_min + (this.coords.p_handle / 2);
+
+                    c.shad_to[0].style.display = "block";
+                    c.shad_to[0].style.left = to_min + "%";
+                    c.shad_to[0].style.width = to_max + "%";
+                } else {
+                    c.shad_to[0].style.display = "none";
+                }
+            }
+        },
+
+
+
+        /**
+         * Write values to input element
+         */
+        writeToInput: function () {
+            if (this.options.type === "single") {
+                if (this.options.values.length) {
+                    this.$cache.input.prop("value", this.result.from_value);
+                } else {
+                    this.$cache.input.prop("value", this.result.from);
+                }
+                this.$cache.input.data("from", this.result.from);
+            } else {
+                if (this.options.values.length) {
+                    this.$cache.input.prop("value", this.result.from_value + this.options.input_values_separator + this.result.to_value);
+                } else {
+                    this.$cache.input.prop("value", this.result.from + this.options.input_values_separator + this.result.to);
+                }
+                this.$cache.input.data("from", this.result.from);
+                this.$cache.input.data("to", this.result.to);
+            }
+        },
+
+
+
+        // =============================================================================================================
+        // Callbacks
+
+        callOnStart: function () {
+            this.writeToInput();
+
+            if (this.options.onStart && typeof this.options.onStart === "function") {
+                if (this.options.scope) {
+                    this.options.onStart.call(this.options.scope, this.result);
+                } else {
+                    this.options.onStart(this.result);
+                }
+            }
+        },
+        callOnChange: function () {
+            this.writeToInput();
+
+            if (this.options.onChange && typeof this.options.onChange === "function") {
+                if (this.options.scope) {
+                    this.options.onChange.call(this.options.scope, this.result);
+                } else {
+                    this.options.onChange(this.result);
+                }
+            }
+        },
+        callOnFinish: function () {
+            this.writeToInput();
+
+            if (this.options.onFinish && typeof this.options.onFinish === "function") {
+                if (this.options.scope) {
+                    this.options.onFinish.call(this.options.scope, this.result);
+                } else {
+                    this.options.onFinish(this.result);
+                }
+            }
+        },
+        callOnUpdate: function () {
+            this.writeToInput();
+
+            if (this.options.onUpdate && typeof this.options.onUpdate === "function") {
+                if (this.options.scope) {
+                    this.options.onUpdate.call(this.options.scope, this.result);
+                } else {
+                    this.options.onUpdate(this.result);
+                }
+            }
+        },
+
+
+
+
+        // =============================================================================================================
+        // Service methods
+
+        toggleInput: function () {
+            this.$cache.input.toggleClass("irs-hidden-input");
+
+            if (this.has_tab_index) {
+                this.$cache.input.prop("tabindex", -1);
+            } else {
+                this.$cache.input.removeProp("tabindex");
+            }
+
+            this.has_tab_index = !this.has_tab_index;
+        },
+
+        /**
+         * Convert real value to percent
+         *
+         * @param value {Number} X in real
+         * @param no_min {boolean=} don't use min value
+         * @returns {Number} X in percent
+         */
+        convertToPercent: function (value, no_min) {
+            var diapason = this.options.max - this.options.min,
+                one_percent = diapason / 100,
+                val, percent;
+
+            if (!diapason) {
+                this.no_diapason = true;
+                return 0;
+            }
+
+            if (no_min) {
+                val = value;
+            } else {
+                val = value - this.options.min;
+            }
+
+            percent = val / one_percent;
+
+            return this.toFixed(percent);
+        },
+
+        /**
+         * Convert percent to real values
+         *
+         * @param percent {Number} X in percent
+         * @returns {Number} X in real
+         */
+        convertToValue: function (percent) {
+            var min = this.options.min,
+                max = this.options.max,
+                min_decimals = min.toString().split(".")[1],
+                max_decimals = max.toString().split(".")[1],
+                min_length, max_length,
+                avg_decimals = 0,
+                abs = 0;
+
+            if (percent === 0) {
+                return this.options.min;
+            }
+            if (percent === 100) {
+                return this.options.max;
+            }
+
+
+            if (min_decimals) {
+                min_length = min_decimals.length;
+                avg_decimals = min_length;
+            }
+            if (max_decimals) {
+                max_length = max_decimals.length;
+                avg_decimals = max_length;
+            }
+            if (min_length && max_length) {
+                avg_decimals = (min_length >= max_length) ? min_length : max_length;
+            }
+
+            if (min < 0) {
+                abs = Math.abs(min);
+                min = +(min + abs).toFixed(avg_decimals);
+                max = +(max + abs).toFixed(avg_decimals);
+            }
+
+            var number = ((max - min) / 100 * percent) + min,
+                string = this.options.step.toString().split(".")[1],
+                result;
+
+            if (string) {
+                number = +number.toFixed(string.length);
+            } else {
+                number = number / this.options.step;
+                number = number * this.options.step;
+
+                number = +number.toFixed(0);
+            }
+
+            if (abs) {
+                number -= abs;
+            }
+
+            if (string) {
+                result = +number.toFixed(string.length);
+            } else {
+                result = this.toFixed(number);
+            }
+
+            if (result < this.options.min) {
+                result = this.options.min;
+            } else if (result > this.options.max) {
+                result = this.options.max;
+            }
+
+            return result;
+        },
+
+        /**
+         * Round percent value with step
+         *
+         * @param percent {Number}
+         * @returns percent {Number} rounded
+         */
+        calcWithStep: function (percent) {
+            var rounded = Math.round(percent / this.coords.p_step) * this.coords.p_step;
+
+            if (rounded > 100) {
+                rounded = 100;
+            }
+            if (percent === 100) {
+                rounded = 100;
+            }
+
+            return this.toFixed(rounded);
+        },
+
+        checkMinInterval: function (p_current, p_next, type) {
+            var o = this.options,
+                current,
+                next;
+
+            if (!o.min_interval) {
+                return p_current;
+            }
+
+            current = this.convertToValue(p_current);
+            next = this.convertToValue(p_next);
+
+            if (type === "from") {
+
+                if (next - current < o.min_interval) {
+                    current = next - o.min_interval;
+                }
+
+            } else {
+
+                if (current - next < o.min_interval) {
+                    current = next + o.min_interval;
+                }
+
+            }
+
+            return this.convertToPercent(current);
+        },
+
+        checkMaxInterval: function (p_current, p_next, type) {
+            var o = this.options,
+                current,
+                next;
+
+            if (!o.max_interval) {
+                return p_current;
+            }
+
+            current = this.convertToValue(p_current);
+            next = this.convertToValue(p_next);
+
+            if (type === "from") {
+
+                if (next - current > o.max_interval) {
+                    current = next - o.max_interval;
+                }
+
+            } else {
+
+                if (current - next > o.max_interval) {
+                    current = next + o.max_interval;
+                }
+
+            }
+
+            return this.convertToPercent(current);
+        },
+
+        checkDiapason: function (p_num, min, max) {
+            var num = this.convertToValue(p_num),
+                o = this.options;
+
+            if (typeof min !== "number") {
+                min = o.min;
+            }
+
+            if (typeof max !== "number") {
+                max = o.max;
+            }
+
+            if (num < min) {
+                num = min;
+            }
+
+            if (num > max) {
+                num = max;
+            }
+
+            return this.convertToPercent(num);
+        },
+
+        toFixed: function (num) {
+            num = num.toFixed(20);
+            return +num;
+        },
+
+        _prettify: function (num) {
+            if (!this.options.prettify_enabled) {
+                return num;
+            }
+
+            if (this.options.prettify && typeof this.options.prettify === "function") {
+                return this.options.prettify(num);
+            } else {
+                return this.prettify(num);
+            }
+        },
+
+        prettify: function (num) {
+            var n = num.toString();
+            return n.replace(/(\d{1,3}(?=(?:\d\d\d)+(?!\d)))/g, "$1" + this.options.prettify_separator);
+        },
+
+        checkEdges: function (left, width) {
+            if (!this.options.force_edges) {
+                return this.toFixed(left);
+            }
+
+            if (left < 0) {
+                left = 0;
+            } else if (left > 100 - width) {
+                left = 100 - width;
+            }
+
+            return this.toFixed(left);
+        },
+
+        validate: function () {
+            var o = this.options,
+                r = this.result,
+                v = o.values,
+                vl = v.length,
+                value,
+                i;
+
+            if (typeof o.min === "string") o.min = +o.min;
+            if (typeof o.max === "string") o.max = +o.max;
+            if (typeof o.from === "string") o.from = +o.from;
+            if (typeof o.to === "string") o.to = +o.to;
+            if (typeof o.step === "string") o.step = +o.step;
+
+            if (typeof o.from_min === "string") o.from_min = +o.from_min;
+            if (typeof o.from_max === "string") o.from_max = +o.from_max;
+            if (typeof o.to_min === "string") o.to_min = +o.to_min;
+            if (typeof o.to_max === "string") o.to_max = +o.to_max;
+
+            if (typeof o.grid_num === "string") o.grid_num = +o.grid_num;
+
+            if (o.max < o.min) {
+                o.max = o.min;
+            }
+
+            if (vl) {
+                o.p_values = [];
+                o.min = 0;
+                o.max = vl - 1;
+                o.step = 1;
+                o.grid_num = o.max;
+                o.grid_snap = true;
+
+                for (i = 0; i < vl; i++) {
+                    value = +v[i];
+
+                    if (!isNaN(value)) {
+                        v[i] = value;
+                        value = this._prettify(value);
+                    } else {
+                        value = v[i];
+                    }
+
+                    o.p_values.push(value);
+                }
+            }
+
+            if (typeof o.from !== "number" || isNaN(o.from)) {
+                o.from = o.min;
+            }
+
+            if (typeof o.to !== "number" || isNaN(o.to)) {
+                o.to = o.max;
+            }
+
+            if (o.type === "single") {
+
+                if (o.from < o.min) o.from = o.min;
+                if (o.from > o.max) o.from = o.max;
+
+            } else {
+
+                if (o.from < o.min) o.from = o.min;
+                if (o.from > o.max) o.from = o.max;
+
+                if (o.to < o.min) o.to = o.min;
+                if (o.to > o.max) o.to = o.max;
+
+                if (this.update_check.from) {
+
+                    if (this.update_check.from !== o.from) {
+                        if (o.from > o.to) o.from = o.to;
+                    }
+                    if (this.update_check.to !== o.to) {
+                        if (o.to < o.from) o.to = o.from;
+                    }
+
+                }
+
+                if (o.from > o.to) o.from = o.to;
+                if (o.to < o.from) o.to = o.from;
+
+            }
+
+            if (typeof o.step !== "number" || isNaN(o.step) || !o.step || o.step < 0) {
+                o.step = 1;
+            }
+
+            if (typeof o.from_min === "number" && o.from < o.from_min) {
+                o.from = o.from_min;
+            }
+
+            if (typeof o.from_max === "number" && o.from > o.from_max) {
+                o.from = o.from_max;
+            }
+
+            if (typeof o.to_min === "number" && o.to < o.to_min) {
+                o.to = o.to_min;
+            }
+
+            if (typeof o.to_max === "number" && o.from > o.to_max) {
+                o.to = o.to_max;
+            }
+
+            if (r) {
+                if (r.min !== o.min) {
+                    r.min = o.min;
+                }
+
+                if (r.max !== o.max) {
+                    r.max = o.max;
+                }
+
+                if (r.from < r.min || r.from > r.max) {
+                    r.from = o.from;
+                }
+
+                if (r.to < r.min || r.to > r.max) {
+                    r.to = o.to;
+                }
+            }
+
+            if (typeof o.min_interval !== "number" || isNaN(o.min_interval) || !o.min_interval || o.min_interval < 0) {
+                o.min_interval = 0;
+            }
+
+            if (typeof o.max_interval !== "number" || isNaN(o.max_interval) || !o.max_interval || o.max_interval < 0) {
+                o.max_interval = 0;
+            }
+
+            if (o.min_interval && o.min_interval > o.max - o.min) {
+                o.min_interval = o.max - o.min;
+            }
+
+            if (o.max_interval && o.max_interval > o.max - o.min) {
+                o.max_interval = o.max - o.min;
+            }
+        },
+
+        decorate: function (num, original) {
+            var decorated = "",
+                o = this.options;
+
+            if (o.prefix) {
+                decorated += o.prefix;
+            }
+
+            decorated += num;
+
+            if (o.max_postfix) {
+                if (o.values.length && num === o.p_values[o.max]) {
+                    decorated += o.max_postfix;
+                    if (o.postfix) {
+                        decorated += " ";
+                    }
+                } else if (original === o.max) {
+                    decorated += o.max_postfix;
+                    if (o.postfix) {
+                        decorated += " ";
+                    }
+                }
+            }
+
+            if (o.postfix) {
+                decorated += o.postfix;
+            }
+
+            return decorated;
+        },
+
+        updateFrom: function () {
+            this.result.from = this.options.from;
+            this.result.from_percent = this.convertToPercent(this.result.from);
+            this.result.from_pretty = this._prettify(this.result.from);
+            if (this.options.values) {
+                this.result.from_value = this.options.values[this.result.from];
+            }
+        },
+
+        updateTo: function () {
+            this.result.to = this.options.to;
+            this.result.to_percent = this.convertToPercent(this.result.to);
+            this.result.to_pretty = this._prettify(this.result.to);
+            if (this.options.values) {
+                this.result.to_value = this.options.values[this.result.to];
+            }
+        },
+
+        updateResult: function () {
+            this.result.min = this.options.min;
+            this.result.max = this.options.max;
+            this.updateFrom();
+            this.updateTo();
+        },
+
+
+        // =============================================================================================================
+        // Grid
+
+        appendGrid: function () {
+            if (!this.options.grid) {
+                return;
+            }
+
+            var o = this.options,
+                i, z,
+
+                total = o.max - o.min,
+                big_num = o.grid_num,
+                big_p = 0,
+                big_w = 0,
+
+                small_max = 4,
+                local_small_max,
+                small_p,
+                small_w = 0,
+
+                result,
+                html = '';
+
+
+
+            this.calcGridMargin();
+
+            if (o.grid_snap) {
+
+                if (total > 50) {
+                    big_num = 50 / o.step;
+                    big_p = this.toFixed(o.step / 0.5);
+                } else {
+                    big_num = total / o.step;
+                    big_p = this.toFixed(o.step / (total / 100));
+                }
+
+            } else {
+                big_p = this.toFixed(100 / big_num);
+            }
+
+            if (big_num > 4) {
+                small_max = 3;
+            }
+            if (big_num > 7) {
+                small_max = 2;
+            }
+            if (big_num > 14) {
+                small_max = 1;
+            }
+            if (big_num > 28) {
+                small_max = 0;
+            }
+
+            for (i = 0; i < big_num + 1; i++) {
+                local_small_max = small_max;
+
+                big_w = this.toFixed(big_p * i);
+
+                if (big_w > 100) {
+                    big_w = 100;
+                }
+                this.coords.big[i] = big_w;
+
+                small_p = (big_w - (big_p * (i - 1))) / (local_small_max + 1);
+
+                for (z = 1; z <= local_small_max; z++) {
+                    if (big_w === 0) {
+                        break;
+                    }
+
+                    small_w = this.toFixed(big_w - (small_p * z));
+
+                    html += '<span class="irs-grid-pol small" style="left: ' + small_w + '%"></span>';
+                }
+
+                html += '<span class="irs-grid-pol" style="left: ' + big_w + '%"></span>';
+
+                result = this.convertToValue(big_w);
+                if (o.values.length) {
+                    result = o.p_values[result];
+                } else {
+                    result = this._prettify(result);
+                }
+
+                html += '<span class="irs-grid-text js-grid-text-' + i + '" style="left: ' + big_w + '%">' + result + '</span>';
+            }
+            this.coords.big_num = Math.ceil(big_num + 1);
+
+
+
+            this.$cache.cont.addClass("irs-with-grid");
+            this.$cache.grid.html(html);
+            this.cacheGridLabels();
+        },
+
+        cacheGridLabels: function () {
+            var $label, i,
+                num = this.coords.big_num;
+
+            for (i = 0; i < num; i++) {
+                $label = this.$cache.grid.find(".js-grid-text-" + i);
+                this.$cache.grid_labels.push($label);
+            }
+
+            this.calcGridLabels();
+        },
+
+        calcGridLabels: function () {
+            var i, label, start = [], finish = [],
+                num = this.coords.big_num;
+
+            for (i = 0; i < num; i++) {
+                this.coords.big_w[i] = this.$cache.grid_labels[i].outerWidth(false);
+                this.coords.big_p[i] = this.toFixed(this.coords.big_w[i] / this.coords.w_rs * 100);
+                this.coords.big_x[i] = this.toFixed(this.coords.big_p[i] / 2);
+
+                start[i] = this.toFixed(this.coords.big[i] - this.coords.big_x[i]);
+                finish[i] = this.toFixed(start[i] + this.coords.big_p[i]);
+            }
+
+            if (this.options.force_edges) {
+                if (start[0] < -this.coords.grid_gap) {
+                    start[0] = -this.coords.grid_gap;
+                    finish[0] = this.toFixed(start[0] + this.coords.big_p[0]);
+
+                    this.coords.big_x[0] = this.coords.grid_gap;
+                }
+
+                if (finish[num - 1] > 100 + this.coords.grid_gap) {
+                    finish[num - 1] = 100 + this.coords.grid_gap;
+                    start[num - 1] = this.toFixed(finish[num - 1] - this.coords.big_p[num - 1]);
+
+                    this.coords.big_x[num - 1] = this.toFixed(this.coords.big_p[num - 1] - this.coords.grid_gap);
+                }
+            }
+
+            this.calcGridCollision(2, start, finish);
+            this.calcGridCollision(4, start, finish);
+
+            for (i = 0; i < num; i++) {
+                label = this.$cache.grid_labels[i][0];
+
+                if (this.coords.big_x[i] !== Number.POSITIVE_INFINITY) {
+                    label.style.marginLeft = -this.coords.big_x[i] + "%";
+                }
+            }
+        },
+
+        // Collisions Calc Beta
+        // TODO: Refactor then have plenty of time
+        calcGridCollision: function (step, start, finish) {
+            var i, next_i, label,
+                num = this.coords.big_num;
+
+            for (i = 0; i < num; i += step) {
+                next_i = i + (step / 2);
+                if (next_i >= num) {
+                    break;
+                }
+
+                label = this.$cache.grid_labels[next_i][0];
+
+                if (finish[i] <= start[next_i]) {
+                    label.style.visibility = "visible";
+                } else {
+                    label.style.visibility = "hidden";
+                }
+            }
+        },
+
+        calcGridMargin: function () {
+            if (!this.options.grid_margin) {
+                return;
+            }
+
+            this.coords.w_rs = this.$cache.rs.outerWidth(false);
+            if (!this.coords.w_rs) {
+                return;
+            }
+
+            if (this.options.type === "single") {
+                this.coords.w_handle = this.$cache.s_single.outerWidth(false);
+            } else {
+                this.coords.w_handle = this.$cache.s_from.outerWidth(false);
+            }
+            this.coords.p_handle = this.toFixed(this.coords.w_handle  / this.coords.w_rs * 100);
+            this.coords.grid_gap = this.toFixed((this.coords.p_handle / 2) - 0.1);
+
+            this.$cache.grid[0].style.width = this.toFixed(100 - this.coords.p_handle) + "%";
+            this.$cache.grid[0].style.left = this.coords.grid_gap + "%";
+        },
+
+
+
+        // =============================================================================================================
+        // Public methods
+
+        update: function (options) {
+            if (!this.input) {
+                return;
+            }
+
+            this.is_update = true;
+
+            this.options.from = this.result.from;
+            this.options.to = this.result.to;
+            this.update_check.from = this.result.from;
+            this.update_check.to = this.result.to;
+
+            this.options = $.extend(this.options, options);
+            this.validate();
+            this.updateResult(options);
+
+            this.toggleInput();
+            this.remove();
+            this.init(true);
+        },
+
+        reset: function () {
+            if (!this.input) {
+                return;
+            }
+
+            this.updateResult();
+            this.update();
+        },
+
+        destroy: function () {
+            if (!this.input) {
+                return;
+            }
+
+            this.toggleInput();
+            this.$cache.input.prop("readonly", false);
+            $.data(this.input, "ionRangeSlider", null);
+
+            this.remove();
+            this.input = null;
+            this.options = null;
+        }
+    };
+
+    $.fn.ionRangeSlider = function (options) {
+        return this.each(function() {
+            if (!$.data(this, "ionRangeSlider")) {
+                $.data(this, "ionRangeSlider", new IonRangeSlider(this, options, plugin_count++));
+            }
+        });
+    };
+
+
+
+    // =================================================================================================================
+    // http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+    // http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+
+    // requestAnimationFrame polyfill by Erik Möller. fixes from Paul Irish and Tino Zijdel
+
+    // MIT license
+
+    (function() {
+        var lastTime = 0;
+        var vendors = ['ms', 'moz', 'webkit', 'o'];
+        for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+            window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+            window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame']
+                || window[vendors[x]+'CancelRequestAnimationFrame'];
+        }
+
+        if (!window.requestAnimationFrame)
+            window.requestAnimationFrame = function(callback, element) {
+                var currTime = new Date().getTime();
+                var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+                var id = window.setTimeout(function() { callback(currTime + timeToCall); },
+                    timeToCall);
+                lastTime = currTime + timeToCall;
+                return id;
+            };
+
+        if (!window.cancelAnimationFrame)
+            window.cancelAnimationFrame = function(id) {
+                clearTimeout(id);
+            };
+    }());
+
+}));
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               /*! jQuery v1.10.2 | (c) 2005, 2013 jQuery Foundation, Inc. | jquery.org/license
+//@ sourceMappingURL=jquery.min.map
+*/
+(function(e,t){var n,r,i=typeof t,o=e.location,a=e.document,s=a.documentElement,l=e.jQuery,u=e.$,c={},p=[],f="1.10.2",d=p.concat,h=p.push,g=p.slice,m=p.indexOf,y=c.toString,v=c.hasOwnProperty,b=f.trim,x=function(e,t){return new x.fn.init(e,t,r)},w=/[+-]?(?:\d*\.|)\d+(?:[eE][+-]?\d+|)/.source,T=/\S+/g,C=/^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g,N=/^(?:\s*(<[\w\W]+>)[^>]*|#([\w-]*))$/,k=/^<(\w+)\s*\/?>(?:<\/\1>|)$/,E=/^[\],:{}\s]*$/,S=/(?:^|:|,)(?:\s*\[)+/g,A=/\\(?:["\\\/bfnrt]|u[\da-fA-F]{4})/g,j=/"[^"\\\r\n]*"|true|false|null|-?(?:\d+\.|)\d+(?:[eE][+-]?\d+|)/g,D=/^-ms-/,L=/-([\da-z])/gi,H=function(e,t){return t.toUpperCase()},q=function(e){(a.addEventListener||"load"===e.type||"complete"===a.readyState)&&(_(),x.ready())},_=function(){a.addEventListener?(a.removeEventListener("DOMContentLoaded",q,!1),e.removeEventListener("load",q,!1)):(a.detachEvent("onreadystatechange",q),e.detachEvent("onload",q))};x.fn=x.prototype={jquery:f,constructor:x,init:function(e,n,r){var i,o;if(!e)return this;if("string"==typeof e){if(i="<"===e.charAt(0)&&">"===e.charAt(e.length-1)&&e.length>=3?[null,e,null]:N.exec(e),!i||!i[1]&&n)return!n||n.jquery?(n||r).find(e):this.constructor(n).find(e);if(i[1]){if(n=n instanceof x?n[0]:n,x.merge(this,x.parseHTML(i[1],n&&n.nodeType?n.ownerDocument||n:a,!0)),k.test(i[1])&&x.isPlainObject(n))for(i in n)x.isFunction(this[i])?this[i](n[i]):this.attr(i,n[i]);return this}if(o=a.getElementById(i[2]),o&&o.parentNode){if(o.id!==i[2])return r.find(e);this.length=1,this[0]=o}return this.context=a,this.selector=e,this}return e.nodeType?(this.context=this[0]=e,this.length=1,this):x.isFunction(e)?r.ready(e):(e.selector!==t&&(this.selector=e.selector,this.context=e.context),x.makeArray(e,this))},selector:"",length:0,toArray:function(){return g.call(this)},get:function(e){return null==e?this.toArray():0>e?this[this.length+e]:this[e]},pushStack:function(e){var t=x.merge(this.constructor(),e);return t.prevObject=this,t.context=this.context,t},each:function(e,t){return x.each(this,e,t)},ready:function(e){return x.ready.promise().done(e),this},slice:function(){return this.pushStack(g.apply(this,arguments))},first:function(){return this.eq(0)},last:function(){return this.eq(-1)},eq:function(e){var t=this.length,n=+e+(0>e?t:0);return this.pushStack(n>=0&&t>n?[this[n]]:[])},map:function(e){return this.pushStack(x.map(this,function(t,n){return e.call(t,n,t)}))},end:function(){return this.prevObject||this.constructor(null)},push:h,sort:[].sort,splice:[].splice},x.fn.init.prototype=x.fn,x.extend=x.fn.extend=function(){var e,n,r,i,o,a,s=arguments[0]||{},l=1,u=arguments.length,c=!1;for("boolean"==typeof s&&(c=s,s=arguments[1]||{},l=2),"object"==typeof s||x.isFunction(s)||(s={}),u===l&&(s=this,--l);u>l;l++)if(null!=(o=arguments[l]))for(i in o)e=s[i],r=o[i],s!==r&&(c&&r&&(x.isPlainObject(r)||(n=x.isArray(r)))?(n?(n=!1,a=e&&x.isArray(e)?e:[]):a=e&&x.isPlainObject(e)?e:{},s[i]=x.extend(c,a,r)):r!==t&&(s[i]=r));return s},x.extend({expando:"jQuery"+(f+Math.random()).replace(/\D/g,""),noConflict:function(t){return e.$===x&&(e.$=u),t&&e.jQuery===x&&(e.jQuery=l),x},isReady:!1,readyWait:1,holdReady:function(e){e?x.readyWait++:x.ready(!0)},ready:function(e){if(e===!0?!--x.readyWait:!x.isReady){if(!a.body)return setTimeout(x.ready);x.isReady=!0,e!==!0&&--x.readyWait>0||(n.resolveWith(a,[x]),x.fn.trigger&&x(a).trigger("ready").off("ready"))}},isFunction:function(e){return"function"===x.type(e)},isArray:Array.isArray||function(e){return"array"===x.type(e)},isWindow:function(e){return null!=e&&e==e.window},isNumeric:function(e){return!isNaN(parseFloat(e))&&isFinite(e)},type:function(e){return null==e?e+"":"object"==typeof e||"function"==typeof e?c[y.call(e)]||"object":typeof e},isPlainObject:function(e){var n;if(!e||"object"!==x.type(e)||e.nodeType||x.isWindow(e))return!1;try{if(e.constructor&&!v.call(e,"constructor")&&!v.call(e.constructor.prototype,"isPrototypeOf"))return!1}catch(r){return!1}if(x.support.ownLast)for(n in e)return v.call(e,n);for(n in e);return n===t||v.call(e,n)},isEmptyObject:function(e){var t;for(t in e)return!1;return!0},error:function(e){throw Error(e)},parseHTML:function(e,t,n){if(!e||"string"!=typeof e)return null;"boolean"==typeof t&&(n=t,t=!1),t=t||a;var r=k.exec(e),i=!n&&[];return r?[t.createElement(r[1])]:(r=x.buildFragment([e],t,i),i&&x(i).remove(),x.merge([],r.childNodes))},parseJSON:function(n){return e.JSON&&e.JSON.parse?e.JSON.parse(n):null===n?n:"string"==typeof n&&(n=x.trim(n),n&&E.test(n.replace(A,"@").replace(j,"]").replace(S,"")))?Function("return "+n)():(x.error("Invalid JSON: "+n),t)},parseXML:function(n){var r,i;if(!n||"string"!=typeof n)return null;try{e.DOMParser?(i=new DOMParser,r=i.parseFromString(n,"text/xml")):(r=new ActiveXObject("Microsoft.XMLDOM"),r.async="false",r.loadXML(n))}catch(o){r=t}return r&&r.documentElement&&!r.getElementsByTagName("parsererror").length||x.error("Invalid XML: "+n),r},noop:function(){},globalEval:function(t){t&&x.trim(t)&&(e.execScript||function(t){e.eval.call(e,t)})(t)},camelCase:function(e){return e.replace(D,"ms-").replace(L,H)},nodeName:function(e,t){return e.nodeName&&e.nodeName.toLowerCase()===t.toLowerCase()},each:function(e,t,n){var r,i=0,o=e.length,a=M(e);if(n){if(a){for(;o>i;i++)if(r=t.apply(e[i],n),r===!1)break}else for(i in e)if(r=t.apply(e[i],n),r===!1)break}else if(a){for(;o>i;i++)if(r=t.call(e[i],i,e[i]),r===!1)break}else for(i in e)if(r=t.call(e[i],i,e[i]),r===!1)break;return e},trim:b&&!b.call("\ufeff\u00a0")?function(e){return null==e?"":b.call(e)}:function(e){return null==e?"":(e+"").replace(C,"")},makeArray:function(e,t){var n=t||[];return null!=e&&(M(Object(e))?x.merge(n,"string"==typeof e?[e]:e):h.call(n,e)),n},inArray:function(e,t,n){var r;if(t){if(m)return m.call(t,e,n);for(r=t.length,n=n?0>n?Math.max(0,r+n):n:0;r>n;n++)if(n in t&&t[n]===e)return n}return-1},merge:function(e,n){var r=n.length,i=e.length,o=0;if("number"==typeof r)for(;r>o;o++)e[i++]=n[o];else while(n[o]!==t)e[i++]=n[o++];return e.length=i,e},grep:function(e,t,n){var r,i=[],o=0,a=e.length;for(n=!!n;a>o;o++)r=!!t(e[o],o),n!==r&&i.push(e[o]);return i},map:function(e,t,n){var r,i=0,o=e.length,a=M(e),s=[];if(a)for(;o>i;i++)r=t(e[i],i,n),null!=r&&(s[s.length]=r);else for(i in e)r=t(e[i],i,n),null!=r&&(s[s.length]=r);return d.apply([],s)},guid:1,proxy:function(e,n){var r,i,o;return"string"==typeof n&&(o=e[n],n=e,e=o),x.isFunction(e)?(r=g.call(arguments,2),i=function(){return e.apply(n||this,r.concat(g.call(arguments)))},i.guid=e.guid=e.guid||x.guid++,i):t},access:function(e,n,r,i,o,a,s){var l=0,u=e.length,c=null==r;if("object"===x.type(r)){o=!0;for(l in r)x.access(e,n,l,r[l],!0,a,s)}else if(i!==t&&(o=!0,x.isFunction(i)||(s=!0),c&&(s?(n.call(e,i),n=null):(c=n,n=function(e,t,n){return c.call(x(e),n)})),n))for(;u>l;l++)n(e[l],r,s?i:i.call(e[l],l,n(e[l],r)));return o?e:c?n.call(e):u?n(e[0],r):a},now:function(){return(new Date).getTime()},swap:function(e,t,n,r){var i,o,a={};for(o in t)a[o]=e.style[o],e.style[o]=t[o];i=n.apply(e,r||[]);for(o in t)e.style[o]=a[o];return i}}),x.ready.promise=function(t){if(!n)if(n=x.Deferred(),"complete"===a.readyState)setTimeout(x.ready);else if(a.addEventListener)a.addEventListener("DOMContentLoaded",q,!1),e.addEventListener("load",q,!1);else{a.attachEvent("onreadystatechange",q),e.attachEvent("onload",q);var r=!1;try{r=null==e.frameElement&&a.documentElement}catch(i){}r&&r.doScroll&&function o(){if(!x.isReady){try{r.doScroll("left")}catch(e){return setTimeout(o,50)}_(),x.ready()}}()}return n.promise(t)},x.each("Boolean Number String Function Array Date RegExp Object Error".split(" "),function(e,t){c["[object "+t+"]"]=t.toLowerCase()});function M(e){var t=e.length,n=x.type(e);return x.isWindow(e)?!1:1===e.nodeType&&t?!0:"array"===n||"function"!==n&&(0===t||"number"==typeof t&&t>0&&t-1 in e)}r=x(a),function(e,t){var n,r,i,o,a,s,l,u,c,p,f,d,h,g,m,y,v,b="sizzle"+-new Date,w=e.document,T=0,C=0,N=st(),k=st(),E=st(),S=!1,A=function(e,t){return e===t?(S=!0,0):0},j=typeof t,D=1<<31,L={}.hasOwnProperty,H=[],q=H.pop,_=H.push,M=H.push,O=H.slice,F=H.indexOf||function(e){var t=0,n=this.length;for(;n>t;t++)if(this[t]===e)return t;return-1},B="checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped",P="[\\x20\\t\\r\\n\\f]",R="(?:\\\\.|[\\w-]|[^\\x00-\\xa0])+",W=R.replace("w","w#"),$="\\["+P+"*("+R+")"+P+"*(?:([*^$|!~]?=)"+P+"*(?:(['\"])((?:\\\\.|[^\\\\])*?)\\3|("+W+")|)|)"+P+"*\\]",I=":("+R+")(?:\\(((['\"])((?:\\\\.|[^\\\\])*?)\\3|((?:\\\\.|[^\\\\()[\\]]|"+$.replace(3,8)+")*)|.*)\\)|)",z=RegExp("^"+P+"+|((?:^|[^\\\\])(?:\\\\.)*)"+P+"+$","g"),X=RegExp("^"+P+"*,"+P+"*"),U=RegExp("^"+P+"*([>+~]|"+P+")"+P+"*"),V=RegExp(P+"*[+~]"),Y=RegExp("="+P+"*([^\\]'\"]*)"+P+"*\\]","g"),J=RegExp(I),G=RegExp("^"+W+"$"),Q={ID:RegExp("^#("+R+")"),CLASS:RegExp("^\\.("+R+")"),TAG:RegExp("^("+R.replace("w","w*")+")"),ATTR:RegExp("^"+$),PSEUDO:RegExp("^"+I),CHILD:RegExp("^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\("+P+"*(even|odd|(([+-]|)(\\d*)n|)"+P+"*(?:([+-]|)"+P+"*(\\d+)|))"+P+"*\\)|)","i"),bool:RegExp("^(?:"+B+")$","i"),needsContext:RegExp("^"+P+"*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\("+P+"*((?:-\\d)?\\d*)"+P+"*\\)|)(?=[^-]|$)","i")},K=/^[^{]+\{\s*\[native \w/,Z=/^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/,et=/^(?:input|select|textarea|button)$/i,tt=/^h\d$/i,nt=/'|\\/g,rt=RegExp("\\\\([\\da-f]{1,6}"+P+"?|("+P+")|.)","ig"),it=function(e,t,n){var r="0x"+t-65536;return r!==r||n?t:0>r?String.fromCharCode(r+65536):String.fromCharCode(55296|r>>10,56320|1023&r)};try{M.apply(H=O.call(w.childNodes),w.childNodes),H[w.childNodes.length].nodeType}catch(ot){M={apply:H.length?function(e,t){_.apply(e,O.call(t))}:function(e,t){var n=e.length,r=0;while(e[n++]=t[r++]);e.length=n-1}}}function at(e,t,n,i){var o,a,s,l,u,c,d,m,y,x;if((t?t.ownerDocument||t:w)!==f&&p(t),t=t||f,n=n||[],!e||"string"!=typeof e)return n;if(1!==(l=t.nodeType)&&9!==l)return[];if(h&&!i){if(o=Z.exec(e))if(s=o[1]){if(9===l){if(a=t.getElementById(s),!a||!a.parentNode)return n;if(a.id===s)return n.push(a),n}else if(t.ownerDocument&&(a=t.ownerDocument.getElementById(s))&&v(t,a)&&a.id===s)return n.push(a),n}else{if(o[2])return M.apply(n,t.getElementsByTagName(e)),n;if((s=o[3])&&r.getElementsByClassName&&t.getElementsByClassName)return M.apply(n,t.getElementsByClassName(s)),n}if(r.qsa&&(!g||!g.test(e))){if(m=d=b,y=t,x=9===l&&e,1===l&&"object"!==t.nodeName.toLowerCase()){c=mt(e),(d=t.getAttribute("id"))?m=d.replace(nt,"\\$&"):t.setAttribute("id",m),m="[id='"+m+"'] ",u=c.length;while(u--)c[u]=m+yt(c[u]);y=V.test(e)&&t.parentNode||t,x=c.join(",")}if(x)try{return M.apply(n,y.querySelectorAll(x)),n}catch(T){}finally{d||t.removeAttribute("id")}}}return kt(e.replace(z,"$1"),t,n,i)}function st(){var e=[];function t(n,r){return e.push(n+=" ")>o.cacheLength&&delete t[e.shift()],t[n]=r}return t}function lt(e){return e[b]=!0,e}function ut(e){var t=f.createElement("div");try{return!!e(t)}catch(n){return!1}finally{t.parentNode&&t.parentNode.removeChild(t),t=null}}function ct(e,t){var n=e.split("|"),r=e.length;while(r--)o.attrHandle[n[r]]=t}function pt(e,t){var n=t&&e,r=n&&1===e.nodeType&&1===t.nodeType&&(~t.sourceIndex||D)-(~e.sourceIndex||D);if(r)return r;if(n)while(n=n.nextSibling)if(n===t)return-1;return e?1:-1}function ft(e){return function(t){var n=t.nodeName.toLowerCase();return"input"===n&&t.type===e}}function dt(e){return function(t){var n=t.nodeName.toLowerCase();return("input"===n||"button"===n)&&t.type===e}}function ht(e){return lt(function(t){return t=+t,lt(function(n,r){var i,o=e([],n.length,t),a=o.length;while(a--)n[i=o[a]]&&(n[i]=!(r[i]=n[i]))})})}s=at.isXML=function(e){var t=e&&(e.ownerDocument||e).documentElement;return t?"HTML"!==t.nodeName:!1},r=at.support={},p=at.setDocument=function(e){var n=e?e.ownerDocument||e:w,i=n.defaultView;return n!==f&&9===n.nodeType&&n.documentElement?(f=n,d=n.documentElement,h=!s(n),i&&i.attachEvent&&i!==i.top&&i.attachEvent("onbeforeunload",function(){p()}),r.attributes=ut(function(e){return e.className="i",!e.getAttribute("className")}),r.getElementsByTagName=ut(function(e){return e.appendChild(n.createComment("")),!e.getElementsByTagName("*").length}),r.getElementsByClassName=ut(function(e){return e.innerHTML="<div class='a'></div><div class='a i'></div>",e.firstChild.className="i",2===e.getElementsByClassName("i").length}),r.getById=ut(function(e){return d.appendChild(e).id=b,!n.getElementsByName||!n.getElementsByName(b).length}),r.getById?(o.find.ID=function(e,t){if(typeof t.getElementById!==j&&h){var n=t.getElementById(e);return n&&n.parentNode?[n]:[]}},o.filter.ID=function(e){var t=e.replace(rt,it);return function(e){return e.getAttribute("id")===t}}):(delete o.find.ID,o.filter.ID=function(e){var t=e.replace(rt,it);return function(e){var n=typeof e.getAttributeNode!==j&&e.getAttributeNode("id");return n&&n.value===t}}),o.find.TAG=r.getElementsByTagName?function(e,n){return typeof n.getElementsByTagName!==j?n.getElementsByTagName(e):t}:function(e,t){var n,r=[],i=0,o=t.getElementsByTagName(e);if("*"===e){while(n=o[i++])1===n.nodeType&&r.push(n);return r}return o},o.find.CLASS=r.getElementsByClassName&&function(e,n){return typeof n.getElementsByClassName!==j&&h?n.getElementsByClassName(e):t},m=[],g=[],(r.qsa=K.test(n.querySelectorAll))&&(ut(function(e){e.innerHTML="<select><option selected=''></option></select>",e.querySelectorAll("[selected]").length||g.push("\\["+P+"*(?:value|"+B+")"),e.querySelectorAll(":checked").length||g.push(":checked")}),ut(function(e){var t=n.createElement("input");t.setAttribute("type","hidden"),e.appendChild(t).setAttribute("t",""),e.querySelectorAll("[t^='']").length&&g.push("[*^$]="+P+"*(?:''|\"\")"),e.querySelectorAll(":enabled").length||g.push(":enabled",":disabled"),e.querySelectorAll("*,:x"),g.push(",.*:")})),(r.matchesSelector=K.test(y=d.webkitMatchesSelector||d.mozMatchesSelector||d.oMatchesSelector||d.msMatchesSelector))&&ut(function(e){r.disconnectedMatch=y.call(e,"div"),y.call(e,"[s!='']:x"),m.push("!=",I)}),g=g.length&&RegExp(g.join("|")),m=m.length&&RegExp(m.join("|")),v=K.test(d.contains)||d.compareDocumentPosition?function(e,t){var n=9===e.nodeType?e.documentElement:e,r=t&&t.parentNode;return e===r||!(!r||1!==r.nodeType||!(n.contains?n.contains(r):e.compareDocumentPosition&&16&e.compareDocumentPosition(r)))}:function(e,t){if(t)while(t=t.parentNode)if(t===e)return!0;return!1},A=d.compareDocumentPosition?function(e,t){if(e===t)return S=!0,0;var i=t.compareDocumentPosition&&e.compareDocumentPosition&&e.compareDocumentPosition(t);return i?1&i||!r.sortDetached&&t.compareDocumentPosition(e)===i?e===n||v(w,e)?-1:t===n||v(w,t)?1:c?F.call(c,e)-F.call(c,t):0:4&i?-1:1:e.compareDocumentPosition?-1:1}:function(e,t){var r,i=0,o=e.parentNode,a=t.parentNode,s=[e],l=[t];if(e===t)return S=!0,0;if(!o||!a)return e===n?-1:t===n?1:o?-1:a?1:c?F.call(c,e)-F.call(c,t):0;if(o===a)return pt(e,t);r=e;while(r=r.parentNode)s.unshift(r);r=t;while(r=r.parentNode)l.unshift(r);while(s[i]===l[i])i++;return i?pt(s[i],l[i]):s[i]===w?-1:l[i]===w?1:0},n):f},at.matches=function(e,t){return at(e,null,null,t)},at.matchesSelector=function(e,t){if((e.ownerDocument||e)!==f&&p(e),t=t.replace(Y,"='$1']"),!(!r.matchesSelector||!h||m&&m.test(t)||g&&g.test(t)))try{var n=y.call(e,t);if(n||r.disconnectedMatch||e.document&&11!==e.document.nodeType)return n}catch(i){}return at(t,f,null,[e]).length>0},at.contains=function(e,t){return(e.ownerDocument||e)!==f&&p(e),v(e,t)},at.attr=function(e,n){(e.ownerDocument||e)!==f&&p(e);var i=o.attrHandle[n.toLowerCase()],a=i&&L.call(o.attrHandle,n.toLowerCase())?i(e,n,!h):t;return a===t?r.attributes||!h?e.getAttribute(n):(a=e.getAttributeNode(n))&&a.specified?a.value:null:a},at.error=function(e){throw Error("Syntax error, unrecognized expression: "+e)},at.uniqueSort=function(e){var t,n=[],i=0,o=0;if(S=!r.detectDuplicates,c=!r.sortStable&&e.slice(0),e.sort(A),S){while(t=e[o++])t===e[o]&&(i=n.push(o));while(i--)e.splice(n[i],1)}return e},a=at.getText=function(e){var t,n="",r=0,i=e.nodeType;if(i){if(1===i||9===i||11===i){if("string"==typeof e.textContent)return e.textContent;for(e=e.firstChild;e;e=e.nextSibling)n+=a(e)}else if(3===i||4===i)return e.nodeValue}else for(;t=e[r];r++)n+=a(t);return n},o=at.selectors={cacheLength:50,createPseudo:lt,match:Q,attrHandle:{},find:{},relative:{">":{dir:"parentNode",first:!0}," ":{dir:"parentNode"},"+":{dir:"previousSibling",first:!0},"~":{dir:"previousSibling"}},preFilter:{ATTR:function(e){return e[1]=e[1].replace(rt,it),e[3]=(e[4]||e[5]||"").replace(rt,it),"~="===e[2]&&(e[3]=" "+e[3]+" "),e.slice(0,4)},CHILD:function(e){return e[1]=e[1].toLowerCase(),"nth"===e[1].slice(0,3)?(e[3]||at.error(e[0]),e[4]=+(e[4]?e[5]+(e[6]||1):2*("even"===e[3]||"odd"===e[3])),e[5]=+(e[7]+e[8]||"odd"===e[3])):e[3]&&at.error(e[0]),e},PSEUDO:function(e){var n,r=!e[5]&&e[2];return Q.CHILD.test(e[0])?null:(e[3]&&e[4]!==t?e[2]=e[4]:r&&J.test(r)&&(n=mt(r,!0))&&(n=r.indexOf(")",r.length-n)-r.length)&&(e[0]=e[0].slice(0,n),e[2]=r.slice(0,n)),e.slice(0,3))}},filter:{TAG:function(e){var t=e.replace(rt,it).toLowerCase();return"*"===e?function(){return!0}:function(e){return e.nodeName&&e.nodeName.toLowerCase()===t}},CLASS:function(e){var t=

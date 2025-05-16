@@ -1,0 +1,208 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h4>Add Book</h4>          
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="bookForm" name="bookForm" ng-submit="AddBook()" novalidate>
+                            <div class="row">
+                                <div class="form-group">
+                                    <div ng-class="{ 'has-error' : bookForm.Name.$invalid && !bookForm.Name.$pristine }">
+                                        <div class="col-md-3">
+                                            <label>Book Name <b style="color: red">*</b></label>
+                                            <input type="text" name="CaseNumber" class="form-control" ng-model="book.Name" required>
+                                            <p ng-show="bookForm.Name.$invalid && !bookForm.Name.$pristine" class="help-block">Name is required.</p>
+                                        </div>
+                                    </div>
+                                    <div ng-class="{ 'has-error' : bookForm.Author.$invalid && !bookForm.Author.$pristine }">
+                                        <div class="col-md-3">
+                                            <label>Author <b style="color: red">*</b></label>
+                                            <input type="text" name="Name" class="form-control" ng-model="book.Author" required>
+                                            <p ng-show="bookForm.Author.$invalid && !bookForm.Author.$pristine" class="help-block">Author is required.</p>
+                                        </div>
+                                    </div>
+                                    <div ng-class="{ 'has-error' : bookForm.Translator.$invalid && !bookForm.Translator.$pristine }">
+                                        <div class="col-md-3">
+                                            <label>Translator</label>
+                                            <input type="text" name="Name" class="form-control" ng-model="book.Translator">
+                                        </div>
+                                    </div>
+                                    <!--<div ng-class="{ 'has-error' : bookForm.Tags.$invalid && !bookForm.Tags.$pristine }">
+            <div class="col-md-3">
+                <label>Tags</label>
+                <input type="text" name="Name" class="form-control" ng-model="book.Tags">
+            </div>
+        </div>-->
+                                    <div class="form-group" ng-class="{ 'has-error': bookForm.Language.$invalid }">
+                                        <div class="col-md-3">
+
+                                            <label>Language <b style="color: red">*</b></label>
+                                            <ui-select name="Language" ng-model="book.Language" on-select="onSelectCallbackLanguage($item, $model)" theme="bootstrap" style="width: 100%;">
+                                                <ui-select-match placeholder="Select...">{{$select.selected}}</ui-select-match>
+                                                <ui-select-choices repeat="item in languageList | filter: $select.search">
+                                                    <div ng-bind-html="item | highlight: $select.search"></div>
+                                                </ui-select-choices>
+                                            </ui-select>
+
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <div class="form-group" ng-class="{ 'has-error': bookForm.Category.$invalid }">
+                                    <div class="col-md-3 margin-top-20">
+
+                                        <label>Category <b style="color: red">*</b></label>
+                                        <ui-select name="Category" ng-model="book.Category" on-select="onSelectCallbackCategory($item, $model)" theme="bootstrap" style="width: 100%;">
+                                            <ui-select-match placeholder="Select...">{{$select.selected.Name}}</ui-select-match>
+                                            <ui-select-choices repeat="item in categoryList | filter: $select.search">
+                                                <div ng-bind-html="item.Name | highlight: $select.search"></div>
+                                            </ui-select-choices>
+                                        </ui-select>
+                                 
+
+                                    </div>
+                                </div>
+
+                                <div class="form-group" ng-class="{ 'has-error': bookForm.Tags.$invalid }">
+                                    <div class="col-md-9 margin-top-20">
+
+                                        <label>Tags </label>                                    
+                                        <ui-select multiple ng-model="multiple.tags" on-select="onSelectCallbackMultipleCategory($item, $model)" ng-disabled="disabled" style="width: 100%;">
+                                            <ui-select-match placeholder="Select tags...">{{$item}}</ui-select-match>
+                                            <ui-select-choices repeat="color in tags | filter:$select.search">
+                                                {{color}}
+                                            </ui-select-choices>
+                                        </ui-select>
+
+                                    </div>
+                                </div>
+
+
+                            </div><br />
+
+
+                            <div class="row">
+                                <div class="form-group">
+                                    <div class="col-md-12">
+                                        <!-- Panel with Borders -->
+                                        <section class="panel panel-with-borders">
+                                            <div class="panel-heading" style="padding: 0 0 5px 15px">
+                                                <h4><i class="icmn-book"></i> Upload Book</h4>
+                                            </div>
+
+                                            <div class="panel-body">
+                                                <div class="row">
+                                                    <div class="col-md-12">
+                                                        <input type="file" multiple="multiple" ngf-select="UploadFiles($files)" />
+                                                        <hr />                                 
+                                                        <ul><li ng-repeat="file in SelectedFiles">{{file.name}}</li></ul>
+                                                        <div id="dvProgress" class="progress" ng-show="Progress >= 0"></div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </section>
+
+                                    </div>
+                                </div>
+                               
+                            </div><br />
+                        
+                            <br />
+                            <div class="row">
+                                <div class="form-group">
+ 
+                                    <!--<button class="btn btn-primary" type="submit" ng-disabled="bookForm.$invalid">Add</button>-->
+                                    <button ng-class="bookForm.$invalid || SelectedFiles.length == 0 ? 'btn btn-default width-full margin-top-10' : 'btn btn-primary width-full margin-top-10'" type="submit" ng-disabled="bookForm.$invalid || SelectedFiles.length == 0">Add book</button>
+                                </div>
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->

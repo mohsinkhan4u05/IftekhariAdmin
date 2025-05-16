@@ -1,0 +1,805 @@
+ock" && !errorContainer.find('[' + _data.errorList + ']')[0])
+            ) {
+                if (options.submit.settings.insertion === 'append') {
+                    errorContainer.append(html);
+                } else if (options.submit.settings.insertion === 'prepend') {
+                    errorContainer.prepend(html);
+                }
+            }
+
+            for (var i = 0; i < errors[inputName].length; i++) {
+                errorContainer.find('[' + _data.errorList + '] ul').append('<li>' + errors[inputName][i] + '</li>');
+            }
+
+            if (options.submit.settings.clear || options.dynamic.settings.trigger) {
+
+                if (group && groupInput) {
+                    input = groupInput;
+                }
+
+                var event = "coucou" + resetSuffix;
+                if (options.submit.settings.clear) {
+                    event += " " + options.submit.settings.clear + resetSuffix;
+                    if (~['radio', 'checkbox'].indexOf(input[0].type)) {
+                        event += " change" + resetSuffix;
+                    }
+                }
+                if (options.dynamic.settings.trigger) {
+                    event += " " + options.dynamic.settings.trigger + resetSuffix;
+                    if (options.dynamic.settings.trigger !== "focusout" && !~['radio', 'checkbox'].indexOf(input[0].type)) {
+                        event += " change" + resetSuffix + " paste" + resetSuffix;
+                    }
+                }
+
+                input.unbind(event).on(event, function(a, b, c, d, e) {
+
+                    return function() {
+                        if (e) {
+                            if ($(c).hasClass(options.submit.settings.errorClass)) {
+                                resetOneError(a, b, c, d, e);
+                            }
+                        } else if ($(b).hasClass(options.submit.settings.errorClass)) {
+                            resetOneError(a, b, c, d);
+                        }
+                    };
+
+                }(inputName, input, label, errorContainer, group));
+            }
+
+            if (options.submit.settings.scrollToError && !window.Validation.hasScrolled) {
+
+                window.Validation.hasScrolled = true;
+
+                var offset = parseFloat(options.submit.settings.scrollToError.offset) || 0,
+                    duration = parseFloat(options.submit.settings.scrollToError.duration) || 500,
+                    handle = (options.submit.settings.display === 'block') ? errorContainer : input;
+
+                $('html, body').animate({
+                    scrollTop: handle.offset().top + offset
+                }, duration);
+
+            }
+
+        }
+
+        function displayErrors() {
+
+            for (var inputName in errors) {
+                if (!errors.hasOwnProperty(inputName)) continue;
+                displayOneError(inputName);
+            }
+
+        }
+
+        function resetOneError(inputName, input, label, container, group) {
+
+            delete errors[inputName];
+
+            if (container) {
+
+                if (options.submit.settings.inputContainer) {
+                    (group ? label : input).parentsUntil(node, options.submit.settings.inputContainer).removeClass(options.submit.settings.errorClass);
+                }
+
+                label && label.removeClass(options.submit.settings.errorClass);
+
+                input.removeClass(options.submit.settings.errorClass);
+
+                if (options.submit.settings.display === 'inline') {
+                    container.find('[' + _data.errorList + ']').remove();
+                }
+
+            } else {
+
+                if (!input) {
+                    input = node.find('[name="' + inputName + '"]');
+
+                    if (!input[0]) {
+                        options.debug && window.Debug.log({
+                            'node': node,
+                            'function': 'resetOneError()',
+                            'arguments': '[name="' + inputName + '"]',
+                            'message': 'ERROR - Unable to find input by name "' + inputName + '"'
+                        });
+
+                        return false;
+                    }
+                }
+
+                input.trigger('coucou' + resetSuffix);
+            }
+
+        }
+
+        function resetErrors() {
+
+            errors = [];
+            window.Validation.hasScrolled = false;
+
+            node.find('[' + _data.errorList + ']').remove();
+            node.find('.' + options.submit.settings.errorClass).removeClass(options.submit.settings.errorClass);
+
+        }
+
+        function submitForm() {
+
+            node[0].submit()
+
+        }
+
+        function destroy() {
+
+            resetErrors();
+            node.find('[' + _data.validation + '],[' + _data.regex + ']').off(delegateSuffix + ' ' + resetSuffix);
+
+            node.find(options.submit.settings.button).off(delegateSuffix).on('click' + delegateSuffix, function() {
+                $(this).closest('form')[0].submit();
+            });
+
+            return true;
+
+        }
+
+        var _getInputValue = function(input) {
+
+            var value;
+            switch ($(input).attr('type')) {
+                case 'checkbox':
+                    value = ($(input).is(':checked')) ? 1 : '';
+                    break;
+                case 'radio':
+                    value = node.find('input[name="' + $(input).attr('name') + '"]:checked').val() || '';
+                    break;
+                default:
+                    value = $(input).val();
+                    break;
+            }
+
+            return value;
+
+        };
+
+        var _typeWatch = (function() {
+            var timer = 0;
+            return function(callback, ms) {
+                clearTimeout(timer);
+                timer = setTimeout(callback, ms);
+            };
+        })();
+
+        var _executeCallback = function(callback, extraParams) {
+
+            if (!callback) {
+                return false;
+            }
+
+            var _callback;
+
+            if (typeof callback === "function") {
+
+                _callback = callback;
+
+            } else if (typeof callback === "string" || callback instanceof Array) {
+
+                _callback = window;
+
+                if (typeof callback === "string") {
+                    callback = [callback, []];
+                }
+
+                var _exploded = callback[0].split('.'),
+                    _params = callback[1],
+                    _isValid = true,
+                    _splitIndex = 0;
+
+                while (_splitIndex < _exploded.length) {
+
+                    if (typeof _callback !== 'undefined') {
+                        _callback = _callback[_exploded[_splitIndex++]];
+                    } else {
+                        _isValid = false;
+                        break;
+                    }
+                }
+
+                if (!_isValid || typeof _callback !== "function") {
+                    options.debug && window.Debug.log({
+                        'node': node,
+                        'function': '_executeCallback()',
+                        'arguments': JSON.stringify(callback),
+                        'message': 'WARNING - Invalid callback function"'
+                    });
+
+                    return false;
+                }
+
+            }
+
+            _callback.apply(this, $.merge(_params || [], (extraParams) ? extraParams : []));
+            return true;
+
+        };
+
+        this.__construct = function() {
+
+            extendOptions();
+            extendRules();
+            extendMessages();
+
+            delegateDynamicValidation();
+            delegateValidation();
+            options.debug && window.Debug.print();
+
+        }();
+
+        return {
+
+            registerError: registerError,
+
+            displayOneError: displayOneError,
+
+            displayErrors: displayErrors,
+
+            resetOneError: resetOneError,
+
+            resetErrors: resetErrors,
+
+            destroy: destroy
+
+        };
+
+    };
+
+    $.fn.validate = $.validate = function(options) {
+
+        return _api.validate(this, options);
+
+    };
+
+    $.fn.addValidation = function(validation) {
+
+        return _api.addValidation(this, validation);
+
+    };
+
+    $.fn.removeValidation = function(validation) {
+
+        return _api.removeValidation(this, validation);
+
+    };
+
+    $.fn.addError = function(error) {
+
+        return _api.addError(this, error);
+
+    };
+
+    $.fn.removeError = function(error) {
+
+        return _api.removeError(this, error);
+
+    };
+
+    $.fn.alterValidationRules = $.alterValidationRules = function(rules) {
+
+        if (!(rules instanceof Array)) {
+            rules = [rules];
+        }
+
+        for (var i = 0; i < rules.length; i++) {
+            _api.alterValidationRules(rules[i]);
+        }
+
+    };
+
+    var _api = {
+
+        _formatValidation: function(validation) {
+
+            validation = validation.toString().replace(/\s/g, '');
+
+            if (validation.charAt(0) === "[" && validation.charAt(validation.length - 1) === "]") {
+                validation = validation.replace(/^\[|]$/g, '');
+            }
+
+            return validation;
+
+        },
+
+        _splitValidation: function(validation) {
+
+            var validationArray = this._formatValidation(validation).split(','),
+                oneValidation;
+
+            for (var i = 0; i < validationArray.length; i++) {
+                oneValidation = validationArray[i];
+                if (/^[a-z]+$/i.test(oneValidation)) {
+                    validationArray[i] = oneValidation.toUpperCase();
+                }
+            }
+
+            return validationArray;
+        },
+
+        _joinValidation: function(validation) {
+
+            return '[' + validation.join(', ') + ']';
+
+        },
+
+        validate: function(node, options) {
+
+            if (typeof node === "function") {
+
+                if (!options.submit.settings.form) {
+                    window.Debug.log({
+                        'node': node,
+                        'function': '$.validate()',
+                        'arguments': '',
+                        'message': 'Undefined property "options.submit.settings.form - Validation dropped'
+                    });
+
+                    window.Debug.print();
+
+                    return;
+                }
+
+                node = $(options.submit.settings.form);
+
+                if (!node[0] || node[0].nodeName.toLowerCase() !== "form") {
+                    window.Debug.log({
+                        'function': '$.validate()',
+                        'arguments': options.submit.settings.form,
+                        'message': 'Unable to find jQuery form element - Validation dropped'
+                    });
+
+                    window.Debug.print();
+
+                    return;
+                }
+
+            } else if (typeof node[0] === 'undefined') {
+                window.Debug.log({
+                    'node': node,
+                    'function': '$.validate()',
+                    'arguments': '$("' + node.selector + '").validate()',
+                    'message': 'Unable to find jQuery form element - Validation dropped'
+                });
+
+                window.Debug.print();
+
+                return;
+            }
+
+            if (options === "destroy") {
+
+                if (!window.Validation.form[node.selector]) {
+                    window.Debug.log({
+                        'node': node,
+                        'function': '$.validate("destroy")',
+                        'arguments': '',
+                        'message': 'Unable to destroy "' + node.selector + '", perhaps it\'s already destroyed?'
+                    });
+
+                    window.Debug.print();
+
+                    return;
+                }
+
+                window.Validation.form[node.selector].destroy();
+
+                return;
+
+            }
+
+            return node.each(function() {
+                window.Validation.form[node.selector] = new Validation($(this), options);
+            });
+
+        },
+
+        addValidation: function(node, validation) {
+
+            var self = this;
+
+            validation = self._splitValidation(validation);
+
+            if (!validation) {
+                return false;
+            }
+
+            return node.each(function() {
+
+                var $this = $(this),
+                    validationData = $this.attr(_data.validation),
+                    validationArray = (validationData && validationData.length) ? self._splitValidation(validationData) : [],
+                    oneValidation;
+
+                for (var i = 0; i < validation.length; i++) {
+
+                    oneValidation = self._formatValidation(validation[i]);
+
+                    if ($.inArray(oneValidation, validationArray) === -1) {
+                        validationArray.push(oneValidation);
+                    }
+                }
+
+                if (validationArray.length) {
+                    $this.attr(_data.validation, self._joinValidation(validationArray));
+                }
+
+            });
+
+        },
+
+        removeValidation: function(node, validation) {
+
+            var self = this;
+
+            validation = self._splitValidation(validation);
+            if (!validation) {
+                return false;
+            }
+
+            return node.each(function() {
+
+                var $this = $(this),
+                    validationData = $this.attr(_data.validation),
+                    validationArray = (validationData && validationData.length) ? self._splitValidation(validationData) : [],
+                    oneValidation,
+                    validationIndex;
+
+                if (!validationArray.length) {
+                    $this.removeAttr(_data.validation);
+                    return true;
+                }
+
+                for (var i = 0; i < validation.length; i++) {
+                    oneValidation = self._formatValidation(validation[i]);
+                    validationIndex = $.inArray(oneValidation, validationArray);
+                    if (validationIndex !== -1) {
+                        validationArray.splice(validationIndex, 1);
+                    }
+
+                }
+
+                if (!validationArray.length) {
+                    $this.removeAttr(_data.validation);
+                    return true;
+                }
+
+                $this.attr(_data.validation, self._joinValidation(validationArray));
+
+            });
+
+        },
+
+        addError: function(node, error) {
+
+            if (!window.Validation.form[node.selector]) {
+                window.Debug.log({
+                    'node': node,
+                    'function': '$.addError()',
+                    'arguments': 'window.Validation.form[' + node.selector + ']',
+                    'message': 'ERROR - Invalid node selector'
+                });
+
+                window.Debug.print();
+
+                return false;
+            }
+
+            if (typeof error !== "object" || Object.prototype.toString.call(error) !== "[object Object]") {
+                window.Debug.log({
+                    'node': node,
+                    'function': '$.addError()',
+                    'arguments': 'window.Validation.form[' + node.selector + ']',
+                    'message': 'ERROR - Invalid argument, must be type object'
+                });
+
+                window.Debug.print();
+
+                return false;
+            }
+
+            var input,
+                onlyOnce = true;
+            for (var inputName in error) {
+
+                if (!error.hasOwnProperty(inputName)) {
+                    continue;
+                }
+
+                if (!(error[inputName] instanceof Array)) {
+                    error[inputName] = [error[inputName]];
+                }
+
+                input = $(node.selector).find('[name="' + inputName + '"]');
+                if (!input[0]) {
+                    window.Debug.log({
+                        'node': node,
+                        'function': '$.addError()',
+                        'arguments': inputName,
+                        'message': 'ERROR - Unable to find ' + '$(' + node.selector + ').find("[name="' + inputName + '"]")'
+                    });
+
+                    window.Debug.print();
+
+                    continue;
+                }
+
+                if (onlyOnce) {
+                    window.Validation.hasScrolled = false;
+                    onlyOnce = false;
+                }
+
+                window.Validation.form[node.selector].resetOneError(inputName, input);
+
+                for (var i = 0; i < error[inputName].length; i++) {
+
+                    if (typeof error[inputName][i] !== "string") {
+                        window.Debug.log({
+                            'node': node,
+                            'function': '$.addError()',
+                            'arguments': error[inputName][i],
+                            'message': 'ERROR - Invalid error object property - Accepted format: {"inputName": "errorString"} or {"inputName": ["errorString", "errorString"]}'
+                        });
+
+                        window.Debug.print();
+
+                        continue;
+                    }
+
+                    window.Validation.form[node.selector].registerError(inputName, error[inputName][i]);
+
+                }
+
+                window.Validation.form[node.selector].displayOneError(inputName);
+
+            }
+
+        },
+
+        removeError: function(node, inputName) {
+
+            if (!window.Validation.form[node.selector]) {
+                window.Debug.log({
+                    'node': node,
+                    'function': '$.removeError()',
+                    'arguments': 'window.Validation.form[' + node.selector + ']',
+                    'message': 'ERROR - Invalid node selector'
+                });
+
+                window.Debug.print();
+
+                return false;
+            }
+
+            if (!inputName) {
+                window.Validation.form[node.selector].resetErrors();
+                return false;
+            }
+
+            if (typeof inputName === "object" && Object.prototype.toString.call(inputName) !== "[object Array]") {
+                window.Debug.log({
+                    'node': node,
+                    'function': '$.removeError()',
+                    'arguments': inputName,
+                    'message': 'ERROR - Invalid inputName, must be type String or Array'
+                });
+
+                window.Debug.print();
+
+                return false;
+            }
+
+            if (!(inputName instanceof Array)) {
+                inputName = [inputName];
+            }
+
+            var input;
+            for (var i = 0; i < inputName.length; i++) {
+
+                input = $(node.selector).find('[name="' + inputName[i] + '"]');
+                if (!input[0]) {
+                    window.Debug.log({
+                        'node': node,
+                        'function': '$.removeError()',
+                        'arguments': inputName[i],
+                        'message': 'ERROR - Unable to find ' + '$(' + node.selector + ').find("[name="' + inputName[i] + '"]")'
+                    });
+
+                    window.Debug.print();
+
+                    continue;
+                }
+
+                window.Validation.form[node.selector].resetOneError(inputName[i], input);
+
+            }
+
+        },
+
+        alterValidationRules: function(ruleObj) {
+
+            if (!ruleObj.rule || (!ruleObj.regex && !ruleObj.message)) {
+                window.Debug.log({
+                    'function': '$.alterValidationRules()',
+                    'message': 'ERROR - Missing one or multiple parameter(s) {rule, regex, message}'
+                });
+                window.Debug.print();
+                return false;
+            }
+
+            ruleObj.rule = ruleObj.rule.toUpperCase();
+
+            if (ruleObj.regex) {
+
+                var regex = _buildRegexFromString(ruleObj.regex);
+
+                if (!(regex instanceof RegExp)) {
+                    window.Debug.log({
+                        'function': '$.alterValidationRules(rule)',
+                        'arguments': regex.toString(),
+                        'message': 'ERROR - Invalid rule'
+                    });
+                    window.Debug.print();
+                    return false;
+                }
+
+                _rules[ruleObj.rule] = regex;
+            }
+
+            if (ruleObj.message) {
+                _messages[ruleObj.rule] = ruleObj.message;
+            }
+
+            return true;
+        }
+
+    };
+
+    function _buildRegexFromString(regex) {
+
+        if (!regex || (typeof regex !== "string" && !(regex instanceof RegExp))) {
+            _regexDebug();
+            return false;
+        }
+
+        if (typeof regex !== 'string') {
+            regex = regex.toString();
+        }
+
+        var separator = regex.charAt(0),
+            index = regex.length - 1,
+            pattern,
+            modifier,
+            rule;
+
+        while (index > 0) {
+            if (/[gimsxeU]/.test(regex.charAt(index))) {
+                index--;
+            } else {
+                break;
+            }
+        }
+
+        if (regex.charAt(index) !== separator) {
+            separator = null;
+        }
+
+        if (separator && index !== regex.length - 1) {
+            modifier = regex.substr(index + 1, regex.length - 1);
+        }
+
+        if (separator) {
+            pattern = regex.substr(1, index - 1);
+        } else {
+            pattern = regex;
+        }
+
+        try {
+            rule = new RegExp(pattern, modifier);
+        } catch (error) {
+            _regexDebug();
+            return false;
+        }
+
+        return rule;
+
+        function _regexDebug() {
+            window.Debug.log({
+                'function': '_buildRegexFromString()',
+                'arguments': '{pattern: {' + (pattern || '') + '}, modifier: {' + (modifier || '') + '}',
+                'message': 'WARNING - Invalid regex given: ' + regex
+            });
+            window.Debug.print();
+        }
+
+    }
+    window.Debug = {
+
+        table: {},
+        log: function(debugObject) {
+
+            if (!debugObject.message || typeof debugObject.message !== "string") {
+                return false;
+            }
+
+            this.table[debugObject.message] = $.extend(
+                Object.preventExtensions({
+                    'node': '',
+                    'function': '',
+                    'arguments': ''
+                }), debugObject
+            );
+
+        },
+        print: function() {
+
+            if (isEmpty(this.table)) {
+                return false;
+            }
+
+            if (console.group !== undefined || console.table !== undefined) {
+
+                console.groupCollapsed('--- jQuery Form Validation Debug ---');
+
+                if (console.table) {
+                    console.table(this.table);
+                } else {
+                    $.each(this.table, function(index, data) {
+                        console.log(data['Name'] + ': ' + data['Execution Time'] + 'ms');
+                    });
+                }
+
+                console.groupEnd();
+
+            } else {
+                console.log('Debug is not available on your current browser, try the most recent version of Chrome or Firefox.');
+            }
+
+            this.table = {};
+
+        }
+
+    };
+
+    String.prototype.capitalize = function() {
+        return this.charAt(0).toUpperCase() + this.slice(1);
+    };
+
+    function isEmpty(obj) {
+        for (var prop in obj) {
+            if (obj.hasOwnProperty(prop))
+                return false;
+        }
+
+        return true;
+    }
+
+    if (!Array.prototype.indexOf) {
+        Array.prototype.indexOf = function(elt) {
+            var len = this.length >>> 0;
+
+            var from = Number(arguments[1]) || 0;
+            from = (from < 0) ? Math.ceil(from) : Math.floor(from);
+            if (from < 0)
+                from += len;
+
+            for (; from < len; from++) {
+                if (from in this &&
+                    this[from] === elt)
+                    return from;
+            }
+            return -1;
+        };
+    }
+    if (!JSON && !JSON.stringify) {
+        JSON.stringify = function(obj) {
+            var t = typeof(obj);
+            if (t !== "object" || obj === null) {
+                if (t === "string") {
+                    obj = '"' + obj + '"';
+                }
+            

@@ -1,0 +1,808 @@
+m2[2];
+					m[1] = a * m2[1] + b * m2[3];
+					m[2] = c * m2[0] + d * m2[2];
+					m[3] = c * m2[1] + d * m2[3];
+					m[4] = tx * m2[0] + ty * m2[2] + m2[4];
+					m[5] = tx * m2[1] + ty * m2[3] + m2[5];
+				}
+				if (invert) {
+					a = m[0];
+					b = m[1];
+					c = m[2];
+					d = m[3];
+					tx = m[4];
+					ty = m[5];
+					determinant = (a * d - b * c);
+					m[0] = d / determinant;
+					m[1] = -b / determinant;
+					m[2] = -c / determinant;
+					m[3] = a / determinant;
+					m[4] = (c * ty - d * tx) / determinant;
+					m[5] = -(a * ty - b * tx) / determinant;
+				}
+				return m;
+			},
+			_localToGlobal = function(e, p, fromTopLeft, decoratee, zeroOrigin) {
+				e = _unwrapElement(e);
+				var m = _getConcatenatedMatrix(e, false, zeroOrigin),
+					x = p.x,
+					y = p.y;
+				if (fromTopLeft) {
+					_getOffsetTransformOrigin(e, p);
+					x -= p.x;
+					y -= p.y;
+				}
+				decoratee = (decoratee === true) ? p : decoratee || {};
+				decoratee.x = x * m[0] + y * m[2] + m[4];
+				decoratee.y = x * m[1] + y * m[3] + m[5];
+				return decoratee;
+			},
+			_localizePoint = function(p, localToGlobal, globalToLocal) {
+				var x = p.x * localToGlobal[0] + p.y * localToGlobal[2] + localToGlobal[4],
+					y = p.x * localToGlobal[1] + p.y * localToGlobal[3] + localToGlobal[5];
+				p.x = x * globalToLocal[0] + y * globalToLocal[2] + globalToLocal[4];
+				p.y = x * globalToLocal[1] + y * globalToLocal[3] + globalToLocal[5];
+				return p;
+			},
+
+			_getElementBounds = function(e, context, fromTopLeft) {
+				if (!(e = _unwrapElement(e))) {
+					return null;
+				}
+				context = _unwrapElement(context);
+				var isSVG = (e.getBBox && _isSVG(e)),
+					origin, left, right, top, bottom, mLocalToGlobal, mGlobalToLocal, p1, p2, p3, p4, bbox, width, height, cache, borderLeft, borderTop, viewBox, viewBoxX, viewBoxY, computedDimensions, cs;
+				if (e === window) {
+					top = _getDocScrollTop();
+					left = _getDocScrollLeft();
+					right = left + (_docElement.clientWidth || e.innerWidth || _doc.body.clientWidth || 0);
+					bottom = top + (((e.innerHeight || 0) - 20 < _docElement.clientHeight) ? _docElement.clientHeight : e.innerHeight || _doc.body.clientHeight || 0); //some browsers (like Firefox) ignore absolutely positioned elements, and collapse the height of the documentElement, so it could be 8px, for example, if you have just an absolutely positioned div. In that case, we use the innerHeight to resolve this.
+				} else if (context === undefined || context === window) {
+					return e.getBoundingClientRect();
+				} else {
+					origin = _getOffsetTransformOrigin(e);
+					left = -origin.x;
+					top = -origin.y;
+					if (isSVG) {
+						bbox = e.getBBox();
+						width = bbox.width;
+						height = bbox.height;
+					} else if ((e.nodeName + "").toLowerCase() !== "svg" && e.offsetWidth) { //Chrome dropped support for "offsetWidth" on SVG elements
+						width = e.offsetWidth;
+						height = e.offsetHeight;
+					} else {
+						computedDimensions = _getComputedStyle(e);
+						width = parseFloat(computedDimensions.width);
+						height = parseFloat(computedDimensions.height);
+					}
+					right = left + width;
+					bottom = top + height;
+					if (e.nodeName.toLowerCase() === "svg" && !_isOldIE) { //root SVG elements are a special beast because they have 2 types of scaling - transforms on themselves as well as the stretching of the SVG canvas itself based on the outer size and the viewBox. If, for example, the SVG's viewbox is "0 0 100 100" but the CSS is set to width:200px; height:200px, that'd make it appear at 2x scale even though the element itself has no CSS transforms but the offsetWidth/offsetHeight are based on that css, not the viewBox so we need to adjust them accordingly.
+						cache = _getSVGOffsets(e);
+						cs = cache.computedStyle || {};
+						viewBox = (e.getAttribute("viewBox") || "0 0").split(" ");
+						viewBoxX = parseFloat(viewBox[0]);
+						viewBoxY = parseFloat(viewBox[1]);
+						borderLeft = parseFloat(cs.borderLeftWidth) || 0;
+						borderTop = parseFloat(cs.borderTopWidth) || 0;
+						right -= width - ((width - borderLeft) / cache.scaleX) - viewBoxX;
+						bottom -= height - ((height - borderTop) / cache.scaleY) - viewBoxY;
+						left -= borderLeft / cache.scaleX - viewBoxX;
+						top -= borderTop / cache.scaleY - viewBoxY;
+						if (computedDimensions) { //when we had to use computed styles, factor in the border now.
+							right += (parseFloat(cs.borderRightWidth) + borderLeft) / cache.scaleX;
+							bottom += (borderTop + parseFloat(cs.borderBottomWidth)) / cache.scaleY;
+						}
+					}
+				}
+				if (e === context) {
+					return {left:left, top:top, width: right - left, height: bottom - top};
+				}
+				mLocalToGlobal = _getConcatenatedMatrix(e);
+				mGlobalToLocal = _getConcatenatedMatrix(context, true);
+				p1 = _localizePoint({x:left, y:top}, mLocalToGlobal, mGlobalToLocal);
+				p2 = _localizePoint({x:right, y:top}, mLocalToGlobal, mGlobalToLocal);
+				p3 = _localizePoint({x:right, y:bottom}, mLocalToGlobal, mGlobalToLocal);
+				p4 = _localizePoint({x:left, y:bottom}, mLocalToGlobal, mGlobalToLocal);
+				left = Math.min(p1.x, p2.x, p3.x, p4.x);
+				top = Math.min(p1.y, p2.y, p3.y, p4.y);
+				_temp1.x = _temp1.y = 0;
+				if (fromTopLeft) {
+					_getOffsetTransformOrigin(context, _temp1);
+				}
+				return {left:left + _temp1.x, top:top + _temp1.y, width:Math.max(p1.x, p2.x, p3.x, p4.x) - left, height:Math.max(p1.y, p2.y, p3.y, p4.y) - top};
+			},
+			// end matrix and point conversion methods
+
+
+
+			_isArrayLike = function(e) {
+				return (e && e.length && e[0] && ((e[0].nodeType && e[0].style && !e.nodeType) || (e[0].length && e[0][0]))) ? true : false; //could be an array of jQuery objects too, so accommodate that.
+			},
+
+			_flattenArray = function(a) {
+				var result = [],
+					l = a.length,
+					i, e, j;
+				for (i = 0; i < l; i++) {
+					e = a[i];
+					if (_isArrayLike(e)) {
+						j = e.length;
+						for (j = 0; j < e.length; j++) {
+							result.push(e[j]);
+						}
+					} else if (e && e.length !== 0) {
+						result.push(e);
+					}
+				}
+				return result;
+			},
+
+			_isTouchDevice = (("ontouchstart" in _docElement) && ("orientation" in window)),
+			_touchEventLookup = (function(types) { //we create an object that makes it easy to translate touch event types into their "pointer" counterparts if we're in a browser that uses those instead. Like IE10 uses "MSPointerDown" instead of "touchstart", for example.
+				var standard = types.split(","),
+					converted = ((_tempDiv.onpointerdown !== undefined) ? "pointerdown,pointermove,pointerup,pointercancel" : (_tempDiv.onmspointerdown !== undefined) ? "MSPointerDown,MSPointerMove,MSPointerUp,MSPointerCancel" : types).split(","),
+					obj = {},
+					i = 8;
+				while (--i > -1) {
+					obj[standard[i]] = converted[i];
+					obj[converted[i]] = standard[i];
+				}
+				return obj;
+			}("touchstart,touchmove,touchend,touchcancel")),
+
+			_addListener = function(element, type, func, capture) {
+				if (element.addEventListener) {
+					element.addEventListener(_touchEventLookup[type] || type, func, capture);
+				} else if (element.attachEvent) {
+					element.attachEvent("on" + type, func);
+				}
+			},
+
+			_removeListener = function(element, type, func) {
+				if (element.removeEventListener) {
+					element.removeEventListener(_touchEventLookup[type] || type, func);
+				} else if (element.detachEvent) {
+					element.detachEvent("on" + type, func);
+				}
+			},
+
+			_hasTouchID = function(list, ID) {
+				var i = list.length;
+				while (--i > -1) {
+					if (list[i].identifier === ID) {
+						return true;
+					}
+				}
+				return false;
+			},
+
+			_onMultiTouchDocumentEnd = function(e) {
+				_isMultiTouching = (e.touches && _dragCount < e.touches.length);
+				_removeListener(e.target, "touchend", _onMultiTouchDocumentEnd);
+			},
+
+			_onMultiTouchDocument = function(e) {
+				_isMultiTouching = (e.touches && _dragCount < e.touches.length);
+				_addListener(e.target, "touchend", _onMultiTouchDocumentEnd);
+			},
+
+			_parseThrowProps = function(draggable, snap, max, min, factor, forceZeroVelocity) {
+				var vars = {},
+					a, i, l;
+				if (snap) {
+					if (factor !== 1 && snap instanceof Array) { //some data must be altered to make sense, like if the user passes in an array of rotational values in degrees, we must convert it to radians. Or for scrollLeft and scrollTop, we invert the values.
+						vars.end = a = [];
+						l = snap.length;
+						if (typeof(snap[0]) === "object") { //if the array is populated with objects, like points ({x:100, y:200}), make copies before multiplying by the factor, otherwise we'll mess up the originals and the user may reuse it elsewhere.
+							for (i = 0; i < l; i++) {
+								a[i] = _copy(snap[i], factor);
+							}
+						} else {
+							for (i = 0; i < l; i++) {
+								a[i] = snap[i] * factor;
+							}
+						}
+						max += 1.1; //allow 1.1 pixels of wiggle room when snapping in order to work around some browser inconsistencies in the way bounds are reported which can make them roughly a pixel off. For example, if "snap:[-$('#menu').width(), 0]" was defined and #menu had a wrapper that was used as the bounds, some browsers would be one pixel off, making the minimum -752 for example when snap was [-753,0], thus instead of snapping to -753, it would snap to 0 since -753 was below the minimum.
+						min -= 1.1;
+					} else if (typeof(snap) === "function") {
+						vars.end = function(value) {
+							var result = snap.call(draggable, value),
+								copy, p;
+							if (factor !== 1 && typeof(result) === "object") {
+								copy = {};
+								for (p in result) {
+									copy[p] = result[p] * factor;
+								}
+								result = copy;
+							}
+							return result; //we need to ensure that we can scope the function call to the Draggable instance itself so that users can access important values like maxX, minX, maxY, minY, x, and y from within that function.
+						};
+					} else {
+						vars.end = snap;
+					}
+				}
+				if (max || max === 0) {
+					vars.max = max;
+				}
+				if (min || min === 0) {
+					vars.min = min;
+				}
+				if (forceZeroVelocity) {
+					vars.velocity = 0;
+				}
+				return vars;
+			},
+
+			_isClickable = function(e) { //sometimes it's convenient to mark an element as clickable by adding a data-clickable="true" attribute (in which case we won't preventDefault() the mouse/touch event). This method checks if the element is an <a>, <input>, or <button> or has an onclick or has the data-clickable or contentEditable attribute set to true (or any of its parent elements).
+				var data;
+				return (!e || !e.getAttribute || e.nodeName === "BODY") ? false : ((data = e.getAttribute("data-clickable")) === "true" || (data !== "false" && (e.onclick || _clickableTagExp.test(e.nodeName + "") || e.getAttribute("contentEditable") === "true"))) ? true : _isClickable(e.parentNode);
+			},
+
+			_setSelectable = function(elements, selectable) {
+				var i = elements.length,
+					e;
+				while (--i > -1) {
+					e = elements[i];
+					e.ondragstart = e.onselectstart = selectable ? null : _emptyFunc;
+					_setStyle(e, "userSelect", (selectable ? "text" : "none"));
+				}
+			},
+
+			_addPaddingBR,
+			_addPaddingLeft = (function() { //this function is in charge of analyzing browser behavior related to padding. It sets the _addPaddingBR to true if the browser doesn't normally factor in the bottom or right padding on the element inside the scrolling area, and it sets _addPaddingLeft to true if it's a browser that requires the extra offset (offsetLeft) to be added to the paddingRight (like Opera).
+				var div = _doc.createElement("div"),
+					child = _doc.createElement("div"),
+					childStyle = child.style,
+					parent = _doc.body || _tempDiv,
+					val;
+				childStyle.display = "inline-block";
+				childStyle.position = "relative";
+				div.style.cssText = child.innerHTML = "width:90px; height:40px; padding:10px; overflow:auto; visibility: hidden";
+				div.appendChild(child);
+				parent.appendChild(div);
+				_addPaddingBR = (child.offsetHeight + 18 > div.scrollHeight); //div.scrollHeight should be child.offsetHeight + 20 because of the 10px of padding on each side, but some browsers ignore one side. We allow a 2px margin of error.
+				childStyle.width = "100%";
+				if (!_transformProp) {
+					childStyle.paddingRight = "500px";
+					val = div.scrollLeft = div.scrollWidth - div.clientWidth;
+					childStyle.left = "-90px";
+					val = (val !== div.scrollLeft);
+				}
+				parent.removeChild(div);
+				return val;
+			}()),
+
+
+
+
+			//The ScrollProxy class wraps an element's contents into another div (we call it "content") that we either add padding when necessary or apply a translate3d() transform in order to overscroll (scroll past the boundaries). This allows us to simply set the scrollTop/scrollLeft (or top/left for easier reverse-axis orientation, which is what we do in Draggable) and it'll do all the work for us. For example, if we tried setting scrollTop to -100 on a normal DOM element, it wouldn't work - it'd look the same as setting it to 0, but if we set scrollTop of a ScrollProxy to -100, it'll give the correct appearance by either setting paddingTop of the wrapper to 100 or applying a 100-pixel translateY.
+			ScrollProxy = function(element, vars) {
+				element = _unwrapElement(element);
+				vars = vars || {};
+				var content = _doc.createElement("div"),
+					style = content.style,
+					node = element.firstChild,
+					offsetTop = 0,
+					offsetLeft = 0,
+					prevTop = element.scrollTop,
+					prevLeft = element.scrollLeft,
+					scrollWidth = element.scrollWidth,
+					scrollHeight = element.scrollHeight,
+					extraPadRight = 0,
+					maxLeft = 0,
+					maxTop = 0,
+					elementWidth, elementHeight, contentHeight, nextNode, transformStart, transformEnd;
+
+				if (_supports3D && vars.force3D !== false) {
+					transformStart = "translate3d(";
+					transformEnd = "px,0px)";
+				} else if (_transformProp) {
+					transformStart = "translate(";
+					transformEnd = "px)";
+				}
+
+				this.scrollTop = function(value, force) {
+					if (!arguments.length) {
+						return -this.top();
+					}
+					this.top(-value, force);
+				};
+
+				this.scrollLeft = function(value, force) {
+					if (!arguments.length) {
+						return -this.left();
+					}
+					this.left(-value, force);
+				};
+
+				this.left = function(value, force) {
+					if (!arguments.length) {
+						return -(element.scrollLeft + offsetLeft);
+					}
+					var dif = element.scrollLeft - prevLeft,
+						oldOffset = offsetLeft;
+					if ((dif > 2 || dif < -2) && !force) { //if the user interacts with the scrollbar (or something else scrolls it, like the mouse wheel), we should kill any tweens of the ScrollProxy.
+						prevLeft = element.scrollLeft;
+						TweenLite.killTweensOf(this, true, {left:1, scrollLeft:1});
+						this.left(-prevLeft);
+						if (vars.onKill) {
+							vars.onKill();
+						}
+						return;
+					}
+					value = -value; //invert because scrolling works in the opposite direction
+					if (value < 0) {
+						offsetLeft = (value - 0.5) | 0;
+						value = 0;
+					} else if (value > maxLeft) {
+						offsetLeft = (value - maxLeft) | 0;
+						value = maxLeft;
+					} else {
+						offsetLeft = 0;
+					}
+					if (offsetLeft || oldOffset) {
+						if (transformStart) {
+							if (!this._suspendTransforms) {
+								style[_transformProp] = transformStart + -offsetLeft + "px," + -offsetTop + transformEnd;
+							}
+						} else {
+							style.left = -offsetLeft + "px";
+						}
+						if (_addPaddingLeft && offsetLeft + extraPadRight >= 0) {
+							style.paddingRight = offsetLeft + extraPadRight + "px";
+						}
+					}
+					element.scrollLeft = value | 0;
+					prevLeft = element.scrollLeft; //don't merge this with the line above because some browsers adjsut the scrollLeft after it's set, so in order to be 100% accurate in tracking it, we need to ask the browser to report it.
+				};
+
+				this.top = function(value, force) {
+					if (!arguments.length) {
+						return -(element.scrollTop + offsetTop);
+					}
+					var dif = element.scrollTop - prevTop,
+						oldOffset = offsetTop;
+					if ((dif > 2 || dif < -2) && !force) { //if the user interacts with the scrollbar (or something else scrolls it, like the mouse wheel), we should kill any tweens of the ScrollProxy.
+						prevTop = element.scrollTop;
+						TweenLite.killTweensOf(this, true, {top:1, scrollTop:1});
+						this.top(-prevTop);
+						if (vars.onKill) {
+							vars.onKill();
+						}
+						return;
+					}
+					value = -value; //invert because scrolling works in the opposite direction
+					if (value < 0) {
+						offsetTop = (value - 0.5) | 0;
+						value = 0;
+					} else if (value > maxTop) {
+						offsetTop = (value - maxTop) | 0;
+						value = maxTop;
+					} else {
+						offsetTop = 0;
+					}
+					if (offsetTop || oldOffset) {
+						if (transformStart) {
+							if (!this._suspendTransforms) {
+								style[_transformProp] = transformStart + -offsetLeft + "px," + -offsetTop + transformEnd;
+							}
+						} else {
+							style.top = -offsetTop + "px";
+						}
+					}
+					element.scrollTop = value | 0;
+					prevTop = element.scrollTop;
+				};
+
+				this.maxScrollTop = function() {
+					return maxTop;
+				};
+
+				this.maxScrollLeft = function() {
+					return maxLeft;
+				};
+
+				this.disable = function() {
+					node = content.firstChild;
+					while (node) {
+						nextNode = node.nextSibling;
+						element.appendChild(node);
+						node = nextNode;
+					}
+					if (element === content.parentNode) { //in case disable() is called when it's already disabled.
+						element.removeChild(content);
+					}
+				};
+
+				this.enable = function() {
+					node = element.firstChild;
+					if (node === content) {
+						return;
+					}
+					while (node) {
+						nextNode = node.nextSibling;
+						content.appendChild(node);
+						node = nextNode;
+					}
+					element.appendChild(content);
+					this.calibrate();
+				};
+
+				this.calibrate = function(force) {
+					var widthMatches = (element.clientWidth === elementWidth),
+						x, y;
+					prevTop = element.scrollTop;
+					prevLeft = element.scrollLeft;
+					if (widthMatches && element.clientHeight === elementHeight && content.offsetHeight === contentHeight && scrollWidth === element.scrollWidth && scrollHeight === element.scrollHeight && !force) {
+						return; //no need to recalculate things if the width and height haven't changed.
+					}
+					if (offsetTop || offsetLeft) {
+						x = this.left();
+						y = this.top();
+						this.left(-element.scrollLeft);
+						this.top(-element.scrollTop);
+					}
+					//first, we need to remove any width constraints to see how the content naturally flows so that we can see if it's wider than the containing element. If so, we've got to record the amount of overage so that we can apply that as padding in order for browsers to correctly handle things. Then we switch back to a width of 100% (without that, some browsers don't flow the content correctly)
+					if (!widthMatches || force) {
+						style.display = "block";
+						style.width = "auto";
+						style.paddingRight = "0px";
+						extraPadRight = Math.max(0, element.scrollWidth - element.clientWidth);
+						//if the content is wider than the container, we need to add the paddingLeft and paddingRight in order for things to behave correctly.
+						if (extraPadRight) {
+							extraPadRight += _getStyle(element, "paddingLeft") + (_addPaddingBR ? _getStyle(element, "paddingRight") : 0);
+						}
+					}
+					style.display = "inline-block";
+					style.position = "relative";
+					style.overflow = "visible";
+					style.verticalAlign = "top";
+					style.width = "100%";
+					style.paddingRight = extraPadRight + "px";
+					//some browsers neglect to factor in the bottom padding when calculating the scrollHeight, so we need to add that padding to the content when that happens. Allow a 2px margin for error
+					if (_addPaddingBR) {
+						style.paddingBottom = _getStyle(element, "paddingBottom", true);
+					}
+					if (_isOldIE) {
+						style.zoom = "1";
+					}
+					elementWidth = element.clientWidth;
+					elementHeight = element.clientHeight;
+					scrollWidth = element.scrollWidth;
+					scrollHeight = element.scrollHeight;
+					maxLeft = element.scrollWidth - elementWidth;
+					maxTop = element.scrollHeight - elementHeight;
+					contentHeight = content.offsetHeight;
+					style.display = "block";
+					if (x || y) {
+						this.left(x);
+						this.top(y);
+					}
+				};
+
+				this.content = content;
+				this.element = element;
+				this._suspendTransforms = false;
+				this.enable();
+			},
+
+
+
+
+
+			Draggable = function(target, vars) {
+				EventDispatcher.call(this, target);
+				target = _unwrapElement(target); //in case the target is a selector object or selector text
+				if (!ThrowPropsPlugin) {
+					ThrowPropsPlugin = _globals.com.greensock.plugins.ThrowPropsPlugin;
+				}
+				this.vars = vars = _copy(vars || {});
+				this.target = target;
+				this.x = this.y = this.rotation = 0;
+				this.dragResistance = parseFloat(vars.dragResistance) || 0;
+				this.edgeResistance = isNaN(vars.edgeResistance) ? 1 : parseFloat(vars.edgeResistance) || 0;
+				this.lockAxis = vars.lockAxis;
+				this.autoScroll = vars.autoScroll || 0;
+				this.lockedAxis = null;
+				this.allowEventDefault = !!vars.allowEventDefault;
+				var type = (vars.type || (_isOldIE ? "top,left" : "x,y")).toLowerCase(),
+					xyMode = (type.indexOf("x") !== -1 || type.indexOf("y") !== -1),
+					rotationMode = (type.indexOf("rotation") !== -1),
+					xProp = rotationMode ? "rotation" : xyMode ? "x" : "left",
+					yProp = xyMode ? "y" : "top",
+					allowX = (type.indexOf("x") !== -1 || type.indexOf("left") !== -1 || type === "scroll"),
+					allowY = (type.indexOf("y") !== -1 || type.indexOf("top") !== -1 || type === "scroll"),
+					minimumMovement = vars.minimumMovement || 2,
+					self = this,
+					triggers = _slice(vars.trigger || vars.handle || target),
+					killProps = {},
+					dragEndTime = 0,
+					checkAutoScrollBounds = false,
+					isClickable = vars.clickableTest || _isClickable,
+					clickTime = 0,
+					enabled, scrollProxy, startPointerX, startPointerY, startElementX, startElementY, hasBounds, hasDragCallback, maxX, minX, maxY, minY, tempVars, cssVars, touch, touchID, rotationOrigin, dirty, old, snapX, snapY, snapXY, isClicking, touchEventTarget, matrix, interrupted, startScrollTop, startScrollLeft, applyObj, allowNativeTouchScrolling, touchDragAxis, isDispatching, clickDispatch, trustedClickDispatch,
+
+					onContextMenu = function(e) { //used to prevent long-touch from triggering a context menu.
+						if (self.isPressed && e.which < 2) {
+							self.endDrag();
+						} else {
+							e.preventDefault();
+							e.stopPropagation();
+							return false;
+						}
+					},
+
+					//this method gets called on every tick of TweenLite.ticker which allows us to synchronize the renders to the core engine (which is typically synchronized with the display refresh via requestAnimationFrame). This is an optimization - it's better than applying the values inside the "mousemove" or "touchmove" event handler which may get called many times inbetween refreshes.
+					render = function(suppressEvents) {
+						if (self.autoScroll && self.isDragging && (checkAutoScrollBounds || dirty)) {
+							var e = target,
+								autoScrollFactor = self.autoScroll * 15, //multiplying by 15 just gives us a better "feel" speed-wise.
+								parent, isRoot, rect, pointerX, pointerY, changeX, changeY, gap;
+							checkAutoScrollBounds = false;
+							_windowProxy.scrollTop = ((window.pageYOffset != null) ? window.pageYOffset : (_docElement.scrollTop != null) ? _docElement.scrollTop : _doc.body.scrollTop);
+							_windowProxy.scrollLeft = ((window.pageXOffset != null) ? window.pageXOffset : (_docElement.scrollLeft != null) ? _docElement.scrollLeft : _doc.body.scrollLeft);
+							pointerX = self.pointerX - _windowProxy.scrollLeft;
+							pointerY = self.pointerY - _windowProxy.scrollTop;
+							while (e && !isRoot) { //walk up the chain and sense wherever the pointer is within 40px of an edge that's scrollable.
+								isRoot = _isRoot(e.parentNode);
+								parent = isRoot ? _windowProxy : e.parentNode;
+								rect = isRoot ? {bottom:Math.max(_docElement.clientHeight, window.innerHeight || 0), right: Math.max(_docElement.clientWidth, window.innerWidth || 0), left:0, top:0} : parent.getBoundingClientRect();
+								changeX = changeY = 0;
+								if (allowY) {
+									gap = parent._gsMaxScrollY - parent.scrollTop;
+									if (gap < 0) {
+										changeY = gap;
+									} else if (pointerY > rect.bottom - 40 && gap) {
+										checkAutoScrollBounds = true;
+										changeY = Math.min(gap, (autoScrollFactor * (1 - Math.max(0, (rect.bottom - pointerY)) / 40)) | 0);
+									} else if (pointerY < rect.top + 40 && parent.scrollTop) {
+										checkAutoScrollBounds = true;
+										changeY = -Math.min(parent.scrollTop, (autoScrollFactor * (1 - Math.max(0, (pointerY - rect.top)) / 40)) | 0);
+									}
+									if (changeY) {
+										parent.scrollTop += changeY;
+									}
+								}
+								if (allowX) {
+									gap = parent._gsMaxScrollX - parent.scrollLeft;
+									if (gap < 0) {
+										changeX = gap;
+									} else if (pointerX > rect.right - 40 && gap) {
+										checkAutoScrollBounds = true;
+										changeX = Math.min(gap, (autoScrollFactor * (1 - Math.max(0, (rect.right - pointerX)) / 40)) | 0);
+									} else if (pointerX < rect.left + 40 && parent.scrollLeft) {
+										checkAutoScrollBounds = true;
+										changeX = -Math.min(parent.scrollLeft, (autoScrollFactor * (1 - Math.max(0, (pointerX - rect.left)) / 40)) | 0);
+									}
+									if (changeX) {
+										parent.scrollLeft += changeX;
+									}
+								}
+
+								if (isRoot && (changeX || changeY)) {
+									window.scrollTo(parent.scrollLeft, parent.scrollTop);
+									setPointerPosition(self.pointerX + changeX, self.pointerY + changeY);
+								}
+								e = parent;
+							}
+						}
+						if (dirty) {
+							var x = self.x,
+								y = self.y,
+								min = 0.000001;
+							if (x < min && x > -min) { //browsers don't handle super small decimals well.
+								x = 0;
+							}
+							if (y < min && y > -min) {
+								y = 0;
+							}
+							if (rotationMode) {
+								self.deltaX = x - applyObj.data.rotation;
+								applyObj.data.rotation = self.rotation = x;
+								applyObj.setRatio(1); //note: instead of doing TweenLite.set(), as a performance optimization we skip right to the method that renders the transforms inside CSSPlugin. For old versions of IE, though, we do a normal TweenLite.set() to leverage its ability to re-reroute to an IE-specific 2D renderer.
+							} else {
+								if (scrollProxy) {
+									if (allowY) {
+										self.deltaY = y - scrollProxy.top();
+										scrollProxy.top(y);
+									}
+									if (allowX) {
+										self.deltaX = x - scrollProxy.left();
+										scrollProxy.left(x);
+									}
+								} else if (xyMode) {
+									if (allowY) {
+										self.deltaY = y - applyObj.data.y;
+										applyObj.data.y = y;
+									}
+									if (allowX) {
+										self.deltaX = x - applyObj.data.x;
+										applyObj.data.x = x;
+									}
+									applyObj.setRatio(1); //note: instead of doing TweenLite.set(), as a performance optimization we skip right to the method that renders the transforms inside CSSPlugin. For old versions of IE, though, we do a normal TweenLite.set() to leverage its ability to re-reroute to an IE-specific 2D renderer.
+								} else {
+									if (allowY) {
+										self.deltaY = y - parseFloat(target.style.top || 0);
+										target.style.top = y + "px";
+									}
+									if (allowX) {
+										self.deltaY = x - parseFloat(target.style.left || 0);
+										target.style.left = x + "px";
+									}
+								}
+							}
+							if (hasDragCallback && !suppressEvents && !isDispatching) {
+								isDispatching = true; //in case onDrag has an update() call (avoid endless loop)
+								_dispatchEvent(self, "drag", "onDrag");
+								isDispatching = false;
+							}
+						}
+						dirty = false;
+					},
+
+					//copies the x/y from the element (whether that be transforms, top/left, or ScrollProxy's top/left) to the Draggable's x and y (and rotation if necessary) properties so that they reflect reality and it also (optionally) applies any snapping necessary. This is used by the ThrowPropsPlugin tween in an onUpdate to ensure things are synced and snapped.
+					syncXY = function(skipOnUpdate, skipSnap) {
+						var x = self.x,
+							y = self.y,
+							snappedValue;
+						if (!target._gsTransform && (xyMode || rotationMode)) { //just in case the _gsTransform got wiped, like if the user called clearProps on the transform or something (very rare), doing an x tween forces a re-parsing of the transforms and population of the _gsTransform.
+							TweenLite.set(target, {x:"+=0", overwrite:false});
+						}
+						if (xyMode) {
+							self.y = target._gsTransform.y;
+							self.x = target._gsTransform.x;
+						} else if (rotationMode) {
+							self.x = self.rotation = target._gsTransform.rotation;
+						} else if (scrollProxy) {
+							self.y = scrollProxy.top();
+							self.x = scrollProxy.left();
+						} else {
+							self.y = parseInt(target.style.top, 10) || 0;
+							self.x = parseInt(target.style.left, 10) || 0;
+						}
+						if ((snapX || snapY || snapXY) && !skipSnap && (self.isDragging || self.isThrowing)) {
+							if (snapXY) {
+								_temp1.x = self.x;
+								_temp1.y = self.y;
+								snappedValue = snapXY(_temp1);
+								if (snappedValue.x !== self.x) {
+									self.x = snappedValue.x;
+									dirty = true;
+								}
+								if (snappedValue.y !== self.y) {
+									self.y = snappedValue.y;
+									dirty = true;
+								}
+							}
+							if (snapX) {
+								snappedValue = snapX(self.x);
+								if (snappedValue !== self.x) {
+									self.x = snappedValue;
+									if (rotationMode) {
+										self.rotation = snappedValue;
+									}
+									dirty = true;
+								}
+							}
+							if (snapY) {
+								snappedValue = snapY(self.y);
+								if (snappedValue !== self.y) {
+									self.y = snappedValue;
+								}
+								dirty = true;
+							}
+						}
+						if (dirty) {
+							render(true);
+						}
+						if (!skipOnUpdate) {
+							self.deltaX = self.x - x;
+							self.deltaY = self.y - y;
+							_dispatchEvent(self, "throwupdate", "onThrowUpdate");
+						}
+					},
+
+					calculateBounds = function() {
+						var bounds, targetBounds, snap, snapIsRaw;
+						hasBounds = false;
+						if (scrollProxy) {
+							scrollProxy.calibrate();
+							self.minX = minX = -scrollProxy.maxScrollLeft();
+							self.minY = minY = -scrollProxy.maxScrollTop();
+							self.maxX = maxX = self.maxY = maxY = 0;
+							hasBounds = true;
+						} else if (!!vars.bounds) {
+							bounds = _getBounds(vars.bounds, target.parentNode); //could be a selector/jQuery object or a DOM element or a generic object like {top:0, left:100, width:1000, height:800} or {minX:100, maxX:1100, minY:0, maxY:800}
+							if (rotationMode) {
+								self.minX = minX = bounds.left;
+								self.maxX = maxX = bounds.left + bounds.width;
+								self.minY = minY = self.maxY = maxY = 0;
+							} else if (vars.bounds.maxX !== undefined || vars.bounds.maxY !== undefined) {
+								bounds = vars.bounds;
+								self.minX = minX = bounds.minX;
+								self.minY = minY = bounds.minY;
+								self.maxX = maxX = bounds.maxX;
+								self.maxY = maxY = bounds.maxY;
+							} else {
+								targetBounds = _getBounds(target, target.parentNode);
+								self.minX = minX = _getStyle(target, xProp) + bounds.left - targetBounds.left;
+								self.minY = minY = _getStyle(target, yProp) + bounds.top - targetBounds.top;
+								self.maxX = maxX = minX + (bounds.width - targetBounds.width);
+								self.maxY = maxY = minY + (bounds.height - targetBounds.height);
+							}
+							if (minX > maxX) {
+								self.minX = maxX;
+								self.maxX = maxX = minX;
+								minX = self.minX;
+							}
+							if (minY > maxY) {
+								self.minY = maxY;
+								self.maxY = maxY = minY;
+								minY = self.minY;
+							}
+							if (rotationMode) {
+								self.minRotation = minX;
+								self.maxRotation = maxX;
+							}
+							hasBounds = true;
+						}
+						if (vars.liveSnap) {
+							snap = (vars.liveSnap === true) ? (vars.snap || {}) : vars.liveSnap;
+							snapIsRaw = (snap instanceof Array || typeof(snap) === "function");
+							if (rotationMode) {
+								snapX = buildSnapFunc((snapIsRaw ? snap : snap.rotation), minX, maxX, 1);
+								snapY = null;
+							} else {
+								if (snap.points) {
+									snapXY = buildPointSnapFunc((snapIsRaw ? snap : snap.points), minX, maxX, minY, maxY, snap.radius, scrollProxy ? -1 : 1);
+								} else {
+									if (allowX) {
+										snapX = buildSnapFunc((snapIsRaw ? snap : snap.x || snap.left || snap.scrollLeft), minX, maxX, scrollProxy ? -1 : 1);
+									}
+									if (allowY) {
+										snapY = buildSnapFunc((snapIsRaw ? snap : snap.y || snap.top || snap.scrollTop), minY, maxY, scrollProxy ? -1 : 1);
+									}
+								}
+							}
+						}
+
+					},
+
+					onThrowComplete = function() {
+						self.isThrowing = false;
+						_dispatchEvent(self, "throwcomplete", "onThrowComplete");
+					},
+					onThrowOverwrite = function() {
+						self.isThrowing = false;
+					},
+
+					animate = function(throwProps, forceZeroVelocity) {
+						var snap, snapIsRaw, tween, overshootTolerance;
+						if (throwProps && ThrowPropsPlugin) {
+							if (throwProps === true) {
+								snap = vars.snap || vars.liveSnap || {};
+								snapIsRaw = (snap instanceof Array || typeof(snap) === "function");
+								throwProps = {resistance:(vars.throwResistance || vars.resistance || 1000) / (rotationMode ? 10 : 1)};
+								if (rotationMode) {
+									throwProps.rotation = _parseThrowProps(self, snapIsRaw ? snap : snap.rotation, maxX, minX, 1, forceZeroVelocity);
+								} else {
+									if (allowX) {
+										throwProps[xProp] = _parseThrowProps(self, snapIsRaw ? snap : snap.points || snap.x || snap.left || snap.scrollLeft, maxX, minX, scrollProxy ? -1 : 1, forceZeroVelocity || (self.lockedAxis === "x"));
+									}
+									if (allowY) {
+										throwProps[yProp] = _parseThrowProps(self, snapIsRaw ? snap : snap.points || snap.y || snap.top || snap.scrollTop, maxY, minY, scrollProxy ? -1 : 1, forceZeroVelocity || (self.lockedAxis === "y"));
+									}
+									if (snap.points || (snap instanceof Array && typeof(snap[0]) === "object")) {
+										throwProps.linkedProps = xProp + "," + yProp;
+										throwProps.radius = snap.radius; //note: we also disable liveSnapping while throwing if there's a "radius" defined, otherwise it looks weird to have the item thrown past a snapping point but live-snapping mid-tween. We do this by altering the onUpdateParams so that "skipSnap" parameter is true for syncXY.
+									}
+								}
+							}
+							self.isThrowing = true;
+							overshootTolerance = (!isNaN(vars.overshootTolerance)) ? vars.overshootTolerance : (vars.edgeResistance === 1) ? 0 : (1 - self.edgeResistance) + 0.2;
+							self.tween = tween = ThrowPropsPlugin.to(scrollProxy || target, {throwProps:throwProps, ease:(vars.ease || _globals.Power3.easeOut), onComplete:onThrowComplete, onOverwrite:onThrowOverwrite, onUpdate:(vars.fastMode ? _dispatchEvent : syncXY), onUpdateParams:(vars.fastMode ? [self, "onthrowupdate", "onThrowUpdate"] : (snap && snap.radius) ? [false, true] : _emptyArray)}, (isNaN(vars.maxDuration) ? 2 : vars.maxDuration), (!isNaN(vars.minDuration) ? vars.minDuration : (overshootTolerance === 0 || (typeof(throwProps) === "object" && throwProps.resistance > 1000)) ? 0 : 0.5), overshootTolerance);
+							if (!vars.fastMode) {
+								//to populate the end values, we just scrub the tween to the end, record the values, and then jump back to the beginning.
+								if (scrollProxy) {
+									scrollProxy._suspendTransforms = true; //Microsoft browsers have a bug that causes them to briefly render the position incorrectly (it flashes to the end state

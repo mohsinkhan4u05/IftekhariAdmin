@@ -1,0 +1,699 @@
+'
+                            });
+
+                            _debug.print();
+                        }
+                    }
+                    // {/debug}
+                }
+
+                var storage = JSON.stringify({
+                    data: data,
+                    ttl: new Date().getTime() + ttl
+                });
+
+                if (compression) {
+                    storage = LZString.compressToUTF16(storage);
+                }
+
+                window[cache].setItem(
+                    'TYPEAHEAD_' + this.selector + ":" + group,
+                    storage
+                );
+            }
+
+            this.incrementGeneratedGroup();
+        },
+
+        incrementGeneratedGroup: function () {
+
+            this.generatedGroupCount++;
+            if (this.generatedGroupCount !== this.generateGroups.length) {
+                return;
+            }
+
+            this.xhr = {};
+
+            for (var i = 0, ii = this.generateGroups.length; i < ii; i++) {
+                this.source[this.generateGroups[i]] = this.tmpSource[this.generateGroups[i]];
+            }
+
+            if (!this.hasDynamicGroups) {
+                this.buildDropdownItemLayout('dynamic');
+            }
+
+            this.options.loadingAnimation && this.container.removeClass('loading');
+
+            this.node.trigger('search' + this.namespace);
+        },
+
+        /**
+         * Key Navigation
+         * tab 9: if option is enabled, blur Typeahead
+         * Up 38: select previous item, skip "group" item
+         * Down 40: select next item, skip "group" item
+         * Right 39: change charAt, if last char fill hint (if options is true)
+         * Esc 27: clears input (is not empty) / blur (if empty)
+         * Enter 13: Select item + submit search
+         *
+         * @param {Object} e Event object
+         * @returns {*}
+         */
+        navigate: function (e) {
+
+            this.helper.executeCallback.call(this, this.options.callback.onNavigateBefore, [this.node, this.query, e]);
+
+            if (e.keyCode === 27) {
+                // #166 Different browsers do not have the same behaviors by default, lets enforce what we want instead
+                e.preventDefault();
+                if (this.query.length) {
+                    this.resetInput();
+                    this.node.trigger('input' + this.namespace, [e]);
+                } else {
+                    this.node.blur();
+                    this.hideLayout();
+                }
+                return;
+            }
+
+            // #284 Blur Typeahead when "Tab" key is pressed
+            if (this.options.blurOnTab && e.keyCode === 9) {
+                this.node.blur();
+                this.hideLayout();
+                return;
+            }
+
+            if (!this.result.length) return;
+
+            var itemList = this.resultContainer.find('.' + this.options.selector.item),
+                activeItem = itemList.filter('.active'),
+                activeItemIndex = activeItem[0] && itemList.index(activeItem) || null,
+                newActiveItemIndex = null;
+
+            if (e.keyCode === 13) {
+                if (activeItem.length > 0) {
+                    // Prevent form submit if an element is selected
+                    e.preventDefault();
+                    activeItem.find('a:first').trigger('click', e);
+                }
+                return;
+            }
+
+            if (e.keyCode === 39) {
+                if (activeItemIndex) {
+                    itemList.eq(activeItemIndex).find('a:first')[0].click();
+                } else if (this.options.hint &&
+                    this.hint.container.val() !== "" &&
+                    this.helper.getCaret(this.node[0]) >= this.query.length) {
+
+                    itemList.find('a[data-index="' + this.hintIndex + '"]')[0].click();
+
+                }
+                return;
+            }
+
+            if (itemList.length > 0) {
+                activeItem.removeClass('active');
+            }
+
+            if (e.keyCode === 38) {
+
+                e.preventDefault();
+
+                if (activeItem.length > 0) {
+                    if (activeItemIndex - 1 >= 0) {
+                        newActiveItemIndex = activeItemIndex - 1;
+                        itemList.eq(newActiveItemIndex).addClass('active');
+                    }
+                } else {
+                    newActiveItemIndex = itemList.length - 1;
+                    itemList.last().addClass('active');
+                }
+
+            } else if (e.keyCode === 40) {
+
+                e.preventDefault();
+
+                if (activeItem.length > 0) {
+                    if (activeItemIndex + 1 < itemList.length) {
+                        newActiveItemIndex = activeItemIndex + 1;
+                        itemList.eq(newActiveItemIndex).addClass('active');
+                    }
+                } else {
+                    newActiveItemIndex = 0;
+                    itemList.first().addClass('active');
+                }
+            }
+
+            // #115 Prevent the input from changing when navigating (arrow up / down) the results
+            if (e.preventInputChange && ~[38, 40].indexOf(e.keyCode)) {
+                this.buildHintLayout(
+                    newActiveItemIndex !== null && newActiveItemIndex < this.result.length ?
+                        [this.result[newActiveItemIndex]] :
+                        null
+                );
+            }
+
+            if (this.options.hint && this.hint.container) {
+                this.hint.container.css(
+                    'color',
+                    e.preventInputChange ?
+                        this.hint.css.color :
+                        newActiveItemIndex === null && this.hint.css.color || this.hint.container.css('background-color') || 'fff'
+                );
+            }
+
+            this.node.val(
+                newActiveItemIndex !== null && !e.preventInputChange ?
+                    this.result[newActiveItemIndex][this.result[newActiveItemIndex].matchedKey] :
+                    this.rawQuery
+            );
+
+            this.helper.executeCallback.call(this, this.options.callback.onNavigateAfter, [
+                this.node,
+                itemList,
+                newActiveItemIndex !== null && itemList.eq(newActiveItemIndex).find('a:first') || undefined,
+                newActiveItemIndex !== null && this.result[newActiveItemIndex] || undefined,
+                this.query,
+                e
+            ]);
+
+        },
+
+        searchResult: function (preserveItem) {
+
+            // #54 In case the item is being clicked, preserve it for onSubmit callback
+            if (!preserveItem) {
+                this.item = {};
+            }
+
+            this.resetLayout();
+
+            if (this.helper.executeCallback.call(this, this.options.callback.onSearch, [this.node, this.query]) === false) return;
+
+            if (this.searchGroups.length) {
+                this.searchResultData();
+            }
+
+            this.helper.executeCallback.call(this, this.options.callback.onResult, [this.node, this.query, this.result, this.resultCount, this.resultCountPerGroup]);
+
+            if (this.isDropdownEvent) {
+                this.helper.executeCallback.call(this, this.options.callback.onDropdownFilter, [this.node, this.query, this.filters.dropdown, this.result]);
+                this.isDropdownEvent = false;
+            }
+        },
+
+        searchResultData: function () {
+
+            var scope = this,
+                group,
+                groupBy = this.groupBy,
+                groupReference = null,
+                item,
+                match,
+                comparedDisplay,
+                comparedQuery = this.query.toLowerCase(),
+                maxItem = this.options.maxItem,
+                maxItemPerGroup = this.options.maxItemPerGroup,
+                hasDynamicFilters = this.filters.dynamic && !this.helper.isEmpty(this.filters.dynamic),
+                displayKeys,
+                displayValue,
+                missingDisplayKey = {},
+                groupFilter,
+                groupFilterResult,
+                groupMatcher,
+                groupMatcherResult,
+                matcher = typeof this.options.matcher === "function" && this.options.matcher,
+                correlativeMatch,
+                correlativeQuery,
+                correlativeDisplay;
+
+            if (this.options.accent) {
+                comparedQuery = this.helper.removeAccent.call(this, comparedQuery);
+            }
+
+            for (var i = 0, ii = this.searchGroups.length; i < ii; ++i) {
+                group = this.searchGroups[i];
+
+                if (this.filters.dropdown && this.filters.dropdown.key === "group" && this.filters.dropdown.value !== group) continue;
+
+                groupFilter = typeof this.options.source[group].filter !== "undefined" ? this.options.source[group].filter : this.options.filter;
+                groupMatcher = typeof this.options.source[group].matcher === "function" && this.options.source[group].matcher || matcher;
+
+                for (var k = 0, kk = this.source[group].length; k < kk; k++) {
+                    if (this.resultItemCount >= maxItem && !this.options.callback.onResult) break;
+                    if (hasDynamicFilters && !this.dynamicFilter.validate.apply(this, [this.source[group][k]])) continue;
+
+                    item = this.source[group][k];
+                    // Validation over null item
+                    if (item === null || typeof item === "boolean") continue;
+
+                    // dropdownFilter by custom groups
+                    if (this.filters.dropdown && (item[this.filters.dropdown.key] || "").toLowerCase() !== (this.filters.dropdown.value || "").toLowerCase()) continue;
+
+                    groupReference = groupBy === "group" ? group : item[groupBy] ? item[groupBy] : item.group;
+
+                    if (groupReference && !this.result[groupReference]) {
+                        this.result[groupReference] = [];
+                        this.resultCountPerGroup[groupReference] = 0;
+                    }
+
+                    if (maxItemPerGroup) {
+                        if (groupBy === "group" && this.result[groupReference].length >= maxItemPerGroup && !this.options.callback.onResult) {
+                            break;
+                        }
+                    }
+
+                    displayKeys = this.options.source[group].display || this.options.display;
+                    for (var v = 0, vv = displayKeys.length; v < vv; ++v) {
+
+                        // #286 option.filter: false shouldn't bother about the option.display keys
+                        if (groupFilter !== false) {
+                            // #183 Allow searching for deep source object keys
+                            displayValue = /\./.test(displayKeys[v]) ?
+                                this.helper.namespace.call(this, displayKeys[v], item) :
+                                item[displayKeys[v]];
+
+                            // #182 Continue looping if empty or undefined key
+                            if (typeof displayValue === 'undefined' || displayValue === '') {
+                                // {debug}
+                                if (this.options.debug) {
+                                    missingDisplayKey[v] = {
+                                        display: displayKeys[v],
+                                        data: item
+                                    };
+                                }
+                                // {/debug}
+                                continue;
+                            }
+
+                            displayValue = this.helper.cleanStringFromScript(displayValue);
+                        }
+
+                        if (typeof groupFilter === "function") {
+                            groupFilterResult = groupFilter.call(this, item, displayValue);
+
+                            // return undefined to skip to next item
+                            // return false to attempt the matching function on the next displayKey
+                            // return true to add the item to the result list
+                            // return item object to modify the item and add it to the result list
+
+                            if (groupFilterResult === undefined) break;
+                            if (!groupFilterResult) continue;
+                            if (typeof groupFilterResult === "object") {
+                                item = groupFilterResult;
+                            }
+                        }
+
+                        if (~[undefined, true].indexOf(groupFilter)) {
+                            comparedDisplay = displayValue;
+                            comparedDisplay = comparedDisplay.toString().toLowerCase();
+
+                            if (this.options.accent) {
+                                comparedDisplay = this.helper.removeAccent.call(this, comparedDisplay);
+                            }
+
+                            match = comparedDisplay.indexOf(comparedQuery);
+
+                            if (this.options.correlativeTemplate && displayKeys[v] === 'compiled' && match < 0 && /\s/.test(comparedQuery)) {
+                                correlativeMatch = true;
+                                correlativeQuery = comparedQuery.split(' ');
+                                correlativeDisplay = comparedDisplay;
+                                for (var x = 0, xx = correlativeQuery.length; x < xx; x++) {
+                                    if (correlativeQuery[x] === "") continue;
+                                    if (!~correlativeDisplay.indexOf(correlativeQuery[x])) {
+                                        correlativeMatch = false;
+                                        break;
+                                    }
+                                    correlativeDisplay = correlativeDisplay.replace(correlativeQuery[x], '');
+                                }
+                            }
+
+                            if (match < 0 && !correlativeMatch) continue;
+                            // @TODO Deprecate these? use matcher instead?
+                            if (this.options.offset && match !== 0) continue;
+
+                            if (groupMatcher) {
+                                groupMatcherResult = groupMatcher.call(this, item, displayValue);
+
+                                // return undefined to skip to next item
+                                // return false to attempt the matching function on the next displayKey
+                                // return true to add the item to the result list
+                                // return item object to modify the item and add it to the result list
+
+                                if (groupMatcherResult === undefined) break;
+                                if (!groupMatcherResult) continue;
+                                if (typeof groupMatcherResult === "object") {
+                                    item = groupMatcherResult;
+                                }
+                            }
+                        }
+
+                        this.resultCount++;
+                        this.resultCountPerGroup[groupReference]++;
+
+                        if (this.resultItemCount < maxItem) {
+                            if (maxItemPerGroup && this.result[groupReference].length >= maxItemPerGroup) {
+                                break;
+                            }
+
+                            this.result[groupReference].push($.extend(true, {matchedKey: displayKeys[v]}, item));
+                            this.resultItemCount++;
+                        }
+                        break;
+                    }
+
+                    if (!this.options.callback.onResult) {
+                        if (this.resultItemCount >= maxItem) {
+                            break;
+                        }
+                        if (maxItemPerGroup && this.result[groupReference].length >= maxItemPerGroup) {
+                            if (groupBy === "group") {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // {debug}
+            if (this.options.debug) {
+                if (!this.helper.isEmpty(missingDisplayKey)) {
+                    _debug.log({
+                        'node': this.selector,
+                        'function': 'searchResult()',
+                        'arguments': JSON.stringify(missingDisplayKey),
+                        'message': 'Missing keys for display, make sure options.display is set properly.'
+                    });
+
+                    _debug.print();
+                }
+            }
+            // {/debug}
+
+            if (this.options.order) {
+                var displayKeys = [],
+                    displayKey;
+
+                for (var group in this.result) {
+                    if (!this.result.hasOwnProperty(group)) continue;
+                    for (var i = 0, ii = this.result[group].length; i < ii; i++) {
+                        displayKey = this.options.source[this.result[group][i].group].display || this.options.display;
+                        if (!~displayKeys.indexOf(displayKey[0])) {
+                            displayKeys.push(displayKey[0]);
+                        }
+                    }
+                    this.result[group].sort(
+                        scope.helper.sort(
+                            displayKeys,
+                            scope.options.order === "asc",
+                            function (a) {
+                                return a.toString().toUpperCase();
+                            }
+                        )
+                    );
+                }
+            }
+
+            var concatResults = [],
+                groupOrder = [];
+
+            if (typeof this.options.groupOrder === "function") {
+                groupOrder = this.options.groupOrder.apply(this, [this.node, this.query, this.result, this.resultCount, this.resultCountPerGroup]);
+            } else if (Array.isArray(this.options.groupOrder)) {
+                groupOrder = this.options.groupOrder;
+            } else if (typeof this.options.groupOrder === "string" && ~["asc", "desc"].indexOf(this.options.groupOrder)) {
+                groupOrder = Object.keys(this.result).sort(
+                    scope.helper.sort(
+                        [],
+                        scope.options.groupOrder === "asc",
+                        function (a) {
+                            return a.toString().toUpperCase();
+                        }
+                    )
+                );
+            } else {
+                groupOrder = Object.keys(this.result);
+            }
+
+            for (var i = 0, ii = groupOrder.length; i < ii; i++) {
+                concatResults = concatResults.concat(this.result[groupOrder[i]] || []);
+            }
+
+
+            // #286 groupTemplate option was deleting group reference Array
+            this.groups = JSON.parse(JSON.stringify(groupOrder));
+
+            this.result = concatResults;
+        },
+
+        buildLayout: function () {
+
+            this.buildHtmlLayout();
+
+            this.buildBackdropLayout();
+
+            this.buildHintLayout();
+
+            if (this.options.callback.onLayoutBuiltBefore) {
+                var tmpResultHtml = this.helper.executeCallback.call(this, this.options.callback.onLayoutBuiltBefore, [this.node, this.query, this.result, this.resultHtml]);
+
+                if (tmpResultHtml instanceof $) {
+                    this.resultHtml = tmpResultHtml;
+                }
+                // {debug}
+                else {
+                    if (this.options.debug) {
+                        _debug.log({
+                            'node': this.selector,
+                            'function': 'callback.onLayoutBuiltBefore()',
+                            'message': 'Invalid returned value - You must return resultHtmlList jQuery Object'
+                        });
+
+                        _debug.print();
+                    }
+                }
+                // {/debug}
+            }
+
+            this.resultHtml && this.resultContainer.html(this.resultHtml);
+
+            if (this.options.callback.onLayoutBuiltAfter) {
+                this.helper.executeCallback.call(this, this.options.callback.onLayoutBuiltAfter, [this.node, this.query, this.result]);
+            }
+        },
+
+        buildHtmlLayout: function () {
+            // #150 Add the option to have no resultList but still perform the search and trigger the callbacks
+            if (this.options.resultContainer === false) return;
+
+            if (!this.resultContainer) {
+                this.resultContainer = $("<div/>", {
+                    "class": this.options.selector.result
+                });
+
+                this.container.append(this.resultContainer);
+            }
+
+            var emptyTemplate;
+            if (!this.result.length) {
+                if (this.options.emptyTemplate && this.query !== "") {
+                    emptyTemplate = typeof this.options.emptyTemplate === "function" ?
+                        this.options.emptyTemplate.call(this, this.query) :
+                        this.options.emptyTemplate.replace(/\{\{query}}/gi, this.helper.cleanStringFromScript(this.query));
+
+                } else {
+                    return;
+                }
+            }
+
+            var _query = this.query.toLowerCase();
+            if (this.options.accent) {
+                _query = this.helper.removeAccent.call(this, _query);
+            }
+
+            var scope = this,
+                groupTemplate = this.groupTemplate || '<ul></ul>',
+                hasEmptyTemplate = false;
+
+            if (this.groupTemplate) {
+                groupTemplate = $(groupTemplate.replace(/<([^>]+)>\{\{(.+?)}}<\/[^>]+>/g, function (match, tag, group, offset, string) {
+                    var template = '',
+                        groups = group === "group" ? scope.groups : [group];
+
+                    if (!scope.result.length) {
+                        if (hasEmptyTemplate === true) return '';
+                        hasEmptyTemplate = true;
+
+                        return '<' + tag + ' class="' + scope.options.selector.empty + '"><a href="javascript:;">' + emptyTemplate + '</a></' + tag + '>';
+                    }
+
+                    for (var i = 0, ii = groups.length; i < ii; ++i) {
+                        template += '<' + tag + ' data-group-template="' + groups[i] + '"><ul></ul></' + tag + '>';
+                    }
+
+                    return template;
+                }));
+            } else {
+                groupTemplate = $(groupTemplate);
+                if (!this.result.length) {
+                    groupTemplate.append(
+                        emptyTemplate instanceof $ ?
+                            emptyTemplate :
+                            '<li class="' + scope.options.selector.empty + '"><a href="javascript:;">' + emptyTemplate + '</a></li>'
+                    );
+                }
+            }
+
+            groupTemplate.addClass(this.options.selector.list + (this.helper.isEmpty(this.result) ? ' empty' : ''));
+
+            var _group,
+                _groupTemplate,
+                _item,
+                _href,
+                _liHtml,
+                _template,
+                _templateValue,
+                _aHtml,
+                _display,
+                _displayKeys,
+                _displayValue,
+                _unusedGroups = this.groupTemplate && this.result.length && scope.groups || [],
+                _tmpIndexOf;
+
+            for (var i = 0, ii = this.result.length; i < ii; ++i) {
+
+                _item = this.result[i];
+                _group = _item.group;
+                _href = this.options.source[_item.group].href || this.options.href;
+                _display = [];
+                _displayKeys = this.options.source[_item.group].display || this.options.display;
+
+                // @TODO Optimize this, shouldn't occur on every looped item?
+                if (this.options.group) {
+                    _group = _item[this.options.group.key];
+                    if (this.options.group.template) {
+                        if (typeof this.options.group.template === "function") {
+                            _groupTemplate = this.options.group.template(_item);
+                        } else if (typeof this.options.template === "string") {
+                            _groupTemplate = this.options.group.template.replace(/\{\{([\w\-\.]+)}}/gi, function (match, index) {
+                                return scope.helper.namespace.call(scope, index, _item, 'get', '');
+                            });
+                        }
+                    }
+
+                    if (!groupTemplate.find('[data-search-group="' + _group + '"]')[0]) {
+                        (this.groupTemplate ? groupTemplate.find('[data-group-template="' + _group + '"] ul') : groupTemplate).append(
+                            $("<li/>", {
+                                "class": scope.options.selector.group,
+                                "html": $("<a/>", {
+                                    "href": "javascript:;",
+                                    "html": _groupTemplate || _group,
+                                    "tabindex": -1
+                                }),
+                                "data-search-group": _group
+                            })
+                        );
+                    }
+                }
+
+                if (this.groupTemplate && _unusedGroups.length) {
+                    _tmpIndexOf = _unusedGroups.indexOf(_group || _item.group);
+                    if (~_tmpIndexOf) {
+                        _unusedGroups.splice(_tmpIndexOf, 1);
+                    }
+                }
+
+                _liHtml = $("<li/>", {
+                    "class": scope.options.selector.item + " " + scope.options.selector.group + '-' + this.helper.slugify.call(this, _group),
+                    "html": $("<a/>", {
+                        // #190 Strange JS-code fragment in href attribute using jQuery version below 1.10
+                        "href": (function () {
+                            if (_href) {
+                                if (typeof _href === "string") {
+                                    _href = _href.replace(/\{\{([^\|}]+)(?:\|([^}]+))*}}/gi, function (match, index, options) {
+
+                                        var value = scope.helper.namespace.call(scope, index, _item, 'get', '');
+
+                                        // #151 Slugify should be an option, not enforced
+                                        options = options && options.split("|") || [];
+                                        if (~options.indexOf('slugify')) {
+                                            value = scope.helper.slugify.call(scope, value);
+                                        }
+
+                                        return value;
+                                    });
+                                } else if (typeof _href === "function") {
+                                    _href = _href(_item);
+                                }
+                                _item.href = _href;
+                            }
+                            return _href || "javascript:;";
+                        }()),
+                        "data-group": _group,
+                        "data-index": i,
+                        "html": function () {
+
+                            _template = (_item.group && scope.options.source[_item.group].template) || scope.options.template;
+
+                            if (_template) {
+                                if (typeof _template === "function") {
+                                    _template = _template.call(scope, scope.query, _item);
+                                }
+
+                                _aHtml = _template.replace(/\{\{([^\|}]+)(?:\|([^}]+))*}}/gi, function (match, index, options) {
+
+                                    var value = scope.helper.cleanStringFromScript(String(scope.helper.namespace.call(scope, index, _item, 'get', '')));
+
+                                    // #151 Slugify should be an option, not enforced
+                                    options = options && options.split("|") || [];
+                                    if (~options.indexOf('slugify')) {
+                                        value = scope.helper.slugify.call(scope, value);
+                                    }
+
+                                    if (!~options.indexOf('raw')) {
+                                        if (scope.options.highlight === true && _query && ~_displayKeys.indexOf(index)) {
+                                            value = scope.helper.highlight.call(scope, value, _query.split(" "), scope.options.accent);
+                                        }
+                                    }
+                                    return value;
+                                });
+                            } else {
+                                for (var i = 0, ii = _displayKeys.length; i < ii; i++) {
+                                    _displayValue = /\./.test(_displayKeys[i]) ?
+                                        scope.helper.namespace.call(scope, _displayKeys[i], _item, 'get', '') :
+                                        _item[_displayKeys[i]];
+
+                                    if (typeof _displayValue === 'undefined' || _displayValue === '') continue;
+
+                                    _display.push(_displayValue);
+                                }
+
+                                _aHtml = '<span class="' + scope.options.selector.display + '">' + scope.helper.cleanStringFromScript(String(_display.join(" "))) + '</span>';
+                            }
+
+                            if ((scope.options.highlight === true && _query && !_template) || scope.options.highlight === "any") {
+                                _aHtml = scope.helper.highlight.call(scope, _aHtml, _query.split(" "), scope.options.accent);
+                            }
+
+                            $(this).append(_aHtml);
+
+                        }
+                    })
+                });
+
+                (function (i, item, liHtml) {
+                    liHtml.on('click', function (e, originalEvent) {
+                        // #208 - Attach "keyboard Enter" original event
+                        if (originalEvent && typeof originalEvent === "object") {
+                            e.originalEvent = originalEvent;
+                        }
+
+                        if (scope.options.mustSelectItem && scope.helper.isEmpty(item)) {
+                            e.preventDefault();
+                            return;
+                        }
+
+                        scope.item = item;
+
+                        if (scope.helper.executeCallback.call(scope, scope.options.callback.onClickBefore, [scope.node, $(this), item, e]) === fals

@@ -1,0 +1,1369 @@
+	recordStartPositions();
+					}
+					if (self.autoScroll) {
+						_recordMaxScrolls(target.parentNode);
+						checkAutoScrollBounds = self.isDragging;
+						render(true);
+					}
+					if (self.autoScroll) { //in case reparenting occurred.
+						_removeScrollListener(target, updateScroll);
+						_addScrollListener(target, updateScroll);
+					}
+					return self;
+				};
+
+				this.enable = function(type) {
+					var id, i, trigger;
+					if (type !== "soft") {
+						i = triggers.length;
+						while (--i > -1) {
+							trigger = triggers[i];
+							_addListener(trigger, "mousedown", onPress);
+							_addListener(trigger, "touchstart", onPress);
+							_addListener(trigger, "click", onClick, true); //note: used to pass true for capture but it prevented click-to-play-video functionality in Firefox.
+							if (!rotationMode) {
+								_setStyle(trigger, "cursor", vars.cursor || "move");
+							}
+							_setStyle(trigger, "touchCallout", "none");
+							_setStyle(trigger, "touchAction", (allowX === allowY) ? "none" : allowX ? "pan-y" : "pan-x");
+							if (_isSVG(trigger)) { // a bug in chrome doesn't respect touch-action on SVG elements - it only works if we set it on the parent SVG.
+								_setStyle(trigger.ownerSVGElement || trigger, "touchAction", (allowX === allowY) ? "none" : allowX ? "pan-y" : "pan-x");
+							}
+							if (!this.vars.allowContextMenu) {
+								_addListener(trigger, "contextmenu", onContextMenu);
+							}
+						}
+						_setSelectable(triggers, false);
+					}
+					_addScrollListener(target, updateScroll);
+					enabled = true;
+					if (ThrowPropsPlugin && type !== "soft") {
+						ThrowPropsPlugin.track(scrollProxy || target, (xyMode ? "x,y" : rotationMode ? "rotation" : "top,left"));
+					}
+					if (scrollProxy) {
+						scrollProxy.enable();
+					}
+					target._gsDragID = id = "d" + (_lookupCount++);
+					_lookup[id] = this;
+					if (scrollProxy) {
+						scrollProxy.element._gsDragID = id;
+					}
+					TweenLite.set(target, {x:"+=0", overwrite:false}); //simply ensures that there's a _gsTransform on the element.
+					applyObj = {
+						t:target,
+						data:_isOldIE ? cssVars : target._gsTransform,
+						tween:{},
+						setRatio:(_isOldIE ? function() { TweenLite.set(target, tempVars); } : CSSPlugin._internals.setTransformRatio || CSSPlugin._internals.set3DTransformRatio)
+					};
+					recordStartPositions();
+					self.update(true);
+					return self;
+				};
+
+				this.disable = function(type) {
+					var dragging = self.isDragging,
+						i, trigger;
+					if (!rotationMode) {
+						i = triggers.length;
+						while (--i > -1) {
+							_setStyle(triggers[i], "cursor", null);
+						}
+					}
+					if (type !== "soft") {
+						i = triggers.length;
+						while (--i > -1) {
+							trigger = triggers[i];
+							_setStyle(trigger, "touchCallout", null);
+							_setStyle(trigger, "touchAction", null);
+							_removeListener(trigger, "mousedown", onPress);
+							_removeListener(trigger, "touchstart", onPress);
+							_removeListener(trigger, "click", onClick);
+							_removeListener(trigger, "contextmenu", onContextMenu);
+						}
+						_setSelectable(triggers, true);
+						if (touchEventTarget) {
+							_removeListener(touchEventTarget, "touchcancel", onRelease);
+							_removeListener(touchEventTarget, "touchend", onRelease);
+							_removeListener(touchEventTarget, "touchmove", onMove);
+						}
+						_removeListener(_doc, "mouseup", onRelease);
+						_removeListener(_doc, "mousemove", onMove);
+					}
+					_removeScrollListener(target, updateScroll);
+					enabled = false;
+					if (ThrowPropsPlugin && type !== "soft") {
+						ThrowPropsPlugin.untrack(scrollProxy || target, (xyMode ? "x,y" : rotationMode ? "rotation" : "top,left"));
+					}
+					if (scrollProxy) {
+						scrollProxy.disable();
+					}
+					_removeFromRenderQueue(render);
+					self.isDragging = self.isPressed = isClicking = false;
+					if (dragging) {
+						_dispatchEvent(self, "dragend", "onDragEnd");
+					}
+					return self;
+				};
+
+				this.enabled = function(value, type) {
+					return arguments.length ? (value ? self.enable(type) : self.disable(type)) : enabled;
+				};
+
+				this.kill = function() {
+					self.isThrowing = false;
+					TweenLite.killTweensOf(scrollProxy || target, true, killProps);
+					self.disable();
+					delete _lookup[target._gsDragID];
+					return self;
+				};
+
+				if (type.indexOf("scroll") !== -1) {
+					scrollProxy = this.scrollProxy = new ScrollProxy(target, _extend({onKill:function() { //ScrollProxy's onKill() gets called if/when the ScrollProxy senses that the user interacted with the scroll position manually (like using the scrollbar). IE9 doesn't fire the "mouseup" properly when users drag the scrollbar of an element, so this works around that issue.
+						if (self.isPressed) {
+							onRelease(null);
+						}}}, vars));
+					//a bug in many Android devices' stock browser causes scrollTop to get forced back to 0 after it is altered via JS, so we set overflow to "hidden" on mobile/touch devices (they hide the scroll bar anyway). That works around the bug. (This bug is discussed at https://code.google.com/p/android/issues/detail?id=19625)
+					target.style.overflowY = (allowY && !_isTouchDevice) ? "auto" : "hidden";
+					target.style.overflowX = (allowX && !_isTouchDevice) ? "auto" : "hidden";
+					target = scrollProxy.content;
+				}
+
+				if (vars.force3D !== false) {
+					TweenLite.set(target, {force3D:true}); //improve performance by forcing a GPU layer when possible
+				}
+				if (rotationMode) {
+					killProps.rotation = 1;
+				} else {
+					if (allowX) {
+						killProps[xProp] = 1;
+					}
+					if (allowY) {
+						killProps[yProp] = 1;
+					}
+				}
+				if (rotationMode) {
+					tempVars = _tempVarsRotation;
+					cssVars = tempVars.css;
+					tempVars.overwrite = false;
+				} else if (xyMode) {
+					tempVars = (allowX && allowY) ? _tempVarsXY : allowX ? _tempVarsX : _tempVarsY;
+					cssVars = tempVars.css;
+					tempVars.overwrite = false;
+				}
+
+				this.enable();
+			},
+			p = Draggable.prototype = new EventDispatcher();
+
+		p.constructor = Draggable;
+		p.pointerX = p.pointerY = p.startX = p.startY = p.deltaX = p.deltaY = 0;
+		p.isDragging = p.isPressed = false;
+		Draggable.version = "0.15.1";
+		Draggable.zIndex = 1000;
+
+		_addListener(_doc, "touchcancel", function() {
+			//some older Android devices intermittently stop dispatching "touchmove" events if we don't listen for "touchcancel" on the document. Very strange indeed.
+		});
+		_addListener(_doc, "contextmenu", function(e) {
+			var p;
+			for (p in _lookup) {
+				if (_lookup[p].isPressed) {
+					_lookup[p].endDrag();
+				}
+			}
+		});
+
+		Draggable.create = function(targets, vars) {
+			if (typeof(targets) === "string") {
+				targets = TweenLite.selector(targets);
+			}
+			var a = (!targets || targets.length === 0) ? [] : _isArrayLike(targets) ? _flattenArray(targets) : [targets],
+				i = a.length;
+			while (--i > -1) {
+				a[i] = new Draggable(a[i], vars);
+			}
+			return a;
+		};
+
+		Draggable.get = function(target) {
+			return _lookup[(_unwrapElement(target) || {})._gsDragID];
+		};
+
+		Draggable.timeSinceDrag = function() {
+			return (_getTime() - _lastDragTime) / 1000;
+		};
+
+		var _tempRect = {}, //reuse to reduce garbage collection tasks
+			_oldIERect = function(e) { //IE8 doesn't support getBoundingClientRect(), so we use this as a backup.
+				var top = 0,
+					left = 0,
+					width, height;
+				e = _unwrapElement(e);
+				width = e.offsetWidth;
+				height = e.offsetHeight;
+				while(e) {
+					top += e.offsetTop;
+					left += e.offsetLeft;
+					e = e.offsetParent;
+				}
+				return {top: top, left: left, width: width, height: height};
+			},
+			_parseRect = function(e, undefined) { //accepts a DOM element, a mouse event, or a rectangle object and returns the corresponding rectangle with left, right, width, height, top, and bottom properties
+				if (e === window) {
+					_tempRect.left = _tempRect.top = 0;
+					_tempRect.width = _tempRect.right = _docElement.clientWidth || e.innerWidth || _doc.body.clientWidth || 0;
+					_tempRect.height = _tempRect.bottom = ((e.innerHeight || 0) - 20 < _docElement.clientHeight) ? _docElement.clientHeight : e.innerHeight || _doc.body.clientHeight || 0;
+					return _tempRect;
+				}
+				var r = (e.pageX !== undefined) ? {left:e.pageX - _getDocScrollLeft(), top:e.pageY - _getDocScrollTop(), right:e.pageX - _getDocScrollLeft() + 1, bottom:e.pageY - _getDocScrollTop() + 1} : (!e.nodeType && e.left !== undefined && e.top !== undefined) ? e : _isOldIE ? _oldIERect(e) : _unwrapElement(e).getBoundingClientRect();
+				if (r.right === undefined && r.width !== undefined) {
+					r.right = r.left + r.width;
+					r.bottom = r.top + r.height;
+				} else if (r.width === undefined) { //some browsers don't include width and height properties. We can't just set them directly on r because some browsers throw errors, so create a new generic object.
+					r = {width: r.right - r.left, height: r.bottom - r.top, right: r.right, left: r.left, bottom: r.bottom, top: r.top};
+				}
+				return r;
+			};
+
+		Draggable.hitTest = function(obj1, obj2, threshold) {
+			if (obj1 === obj2) {
+				return false;
+			}
+			var r1 = _parseRect(obj1),
+				r2 = _parseRect(obj2),
+				isOutside = (r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top),
+				overlap, area, isRatio;
+			if (isOutside || !threshold) {
+				return !isOutside;
+			}
+			isRatio = ((threshold + "").indexOf("%") !== -1);
+			threshold = parseFloat(threshold) || 0;
+			overlap = {left:Math.max(r1.left, r2.left), top:Math.max(r1.top, r2.top)};
+			overlap.width = Math.min(r1.right, r2.right) - overlap.left;
+			overlap.height = Math.min(r1.bottom, r2.bottom) - overlap.top;
+			if (overlap.width < 0 || overlap.height < 0) {
+				return false;
+			}
+			if (isRatio) {
+				threshold *= 0.01;
+				area = overlap.width * overlap.height;
+				return (area >= r1.width * r1.height * threshold || area >= r2.width * r2.height * threshold);
+			}
+			return (overlap.width > threshold && overlap.height > threshold);
+		};
+
+		_placeholderDiv.style.cssText = "visibility:hidden;height:1px;top:-1px;pointer-events:none;position:relative;clear:both;";
+
+		return Draggable;
+
+	}, true);
+
+}); if (_gsScope._gsDefine) { _gsScope._gsQueue.pop()(); }
+
+//export to AMD/RequireJS and CommonJS/Node (precursor to full modular build system coming at a later date)
+(function(name) {
+	"use strict";
+	var getGlobal = function() {
+		return (_gsScope.GreenSockGlobals || _gsScope)[name];
+	};
+	if (typeof(module) !== "undefined" && module.exports) { //node
+		require("../TweenLite.js");
+		require("../plugins/CSSPlugin.js");
+		module.exports = getGlobal();
+	} else if (typeof(define) === "function" && define.amd) { //AMD
+		define(["TweenLite", "CSSPlugin"], getGlobal);
+	}
+}("Draggable"));                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     /*!
+ * jQuery Form Validation
+ * Copyright (C) 2015 RunningCoder.org
+ * Licensed under the MIT license
+ *
+ * @author Tom Bertrand
+ * @version 1.5.3 (2015-07-16)
+ * @link http://www.runningcoder.org/jqueryvalidation/
+*/
+;
+(function (window, document, $, undefined) {
+
+    window.Validation = {
+        form: [],
+        labels: {},
+        hasScrolled: false
+    };
+
+    /**
+     * Fail-safe preventExtensions function for older browsers
+     */
+    if (typeof Object.preventExtensions !== "function") {
+        Object.preventExtensions = function (obj) {
+            return obj;
+        };
+    }
+
+    // Not using strict to avoid throwing a window error on bad config extend.
+    // console.debug is used instead to debug Validation
+    //"use strict";
+
+    // =================================================================================================================
+    /**
+     * @private
+     * RegExp rules
+     */
+    var _rules = {
+        NOTEMPTY: /\S/,
+        INTEGER: /^\d+$/,
+        NUMERIC: /^\d+(?:[,\s]\d{3})*(?:\.\d+)?$/,
+        MIXED: /^[\w\s-]+$/,
+        NAME: /^['a-zãàáäâẽèéëêìíïîõòóöôùúüûñç\s-]+$/i,
+        NOSPACE: /^(?!\s)\S*$/,
+        TRIM: /^[^\s].*[^\s]$/,
+        DATE: /^\d{4}-\d{2}-\d{2}(\s\d{2}:\d{2}(:\d{2})?)?$/,
+        EMAIL: /^([^@]+?)@(([a-z0-9]-*)*[a-z0-9]+\.)+([a-z0-9]+)$/i,
+        URL: /^(https?:\/\/)?((([a-z0-9]-*)*[a-z0-9]+\.?)*([a-z0-9]+))(\/[\w?=\.-]*)*$/,
+        PHONE: /^(\()?\d{3}(\))?(-|\s)?\d{3}(-|\s)\d{4}$/,
+        OPTIONAL: /\S/,
+        COMPARISON: /^\s*([LV])\s*([<>]=?|==|!=)\s*([^<>=!]+?)\s*$/
+    };
+
+    /**
+     * @private
+     * Error messages
+     */
+    var _messages = {
+        'default': '$ contain error(s).',
+        'NOTEMPTY': '$ must not be empty.',
+        'INTEGER': '$ must be an integer.',
+        'NUMERIC': '$ must be numeric.',
+        'MIXED': '$ must be letters or numbers (no special characters).',
+        'NAME': '$ must not contain special characters.',
+        'NOSPACE': '$ must not contain spaces.',
+        'TRIM': '$ must not start or end with space character.',
+        'DATE': '$ is not a valid with format YYYY-MM-DD.',
+        'EMAIL': '$ is not valid.',
+        'URL': '$ is not valid.',
+        'PHONE': '$ is not a valid phone number.',
+        '<': '$ must be less than % characters.',
+        '<=': '$ must be less or equal to % characters.',
+        '>': '$ must be greater than % characters.',
+        '>=': '$ must be greater or equal to % characters.',
+        '==': '$ must be equal to %',
+        '!=': '$ must be different than %'
+    };
+
+    /**
+     * @private
+     * HTML5 data attributes
+     */
+    var _data = {
+        validation: 'data-validation',
+        validationMessage: 'data-validation-message',
+        regex: 'data-validation-regex',
+        regexReverse: 'data-validation-regex-reverse',
+        regexMessage: 'data-validation-regex-message',
+        group: 'data-validation-group',
+        label: 'data-validation-label',
+        errorList: 'data-error-list'
+    }
+
+    /**
+     * @private
+     * Default options
+     *
+     * @link http://www.runningcoder.org/jqueryvalidation/documentation/
+     */
+    var _options = {
+        submit: {
+            settings: {
+                form: null,
+                display: "inline",
+                insertion: "append",
+                allErrors: false,
+                trigger: "click",
+                button: "[type='submit']",
+                errorClass: "error",
+                errorListClass: "error-list",
+                errorListContainer: null,
+                inputContainer: null,
+                clear: "focusin",
+                scrollToError: false
+            },
+            callback: {
+                onInit: null,
+                onValidate: null,
+                onError: null,
+                onBeforeSubmit: null,
+                onSubmit: null,
+                onAfterSubmit: null
+            }
+        },
+        dynamic: {
+            settings: {
+                trigger: null,
+                delay: 300
+            },
+            callback: {
+                onSuccess: null,
+                onError: null,
+                onComplete: null
+            }
+        },
+        rules: {},
+        messages: {},
+        labels: {},
+        debug: false
+    };
+
+    /**
+     * @private
+     * Limit the supported options on matching keys
+     */
+    var _supported = {
+        submit: {
+            settings: {
+                display: ["inline", "block"],
+                insertion: ["append", "prepend"], //"before", "insertBefore", "after", "insertAfter"
+                allErrors: [true, false],
+                clear: ["focusin", "keypress", false],
+                trigger: [
+                    "click", "dblclick", "focusout",
+                    "hover", "mousedown", "mouseenter",
+                    "mouseleave", "mousemove", "mouseout",
+                    "mouseover", "mouseup", "toggle"
+                ]
+            }
+        },
+        dynamic: {
+            settings: {
+                trigger: ["focusout", "keydown", "keypress", "keyup"]
+            }
+        },
+        debug: [true, false]
+    };
+
+    // =================================================================================================================
+
+    /**
+     * @constructor
+     * Validation Class
+     *
+     * @param {Object} node jQuery form object
+     * @param {Object} options User defined options
+     */
+    var Validation = function (node, options) {
+
+        var errors = [],
+            messages = {},
+            formData = {},
+            delegateSuffix = ".vd", // validation.delegate
+            resetSuffix = ".vr";    // validation.resetError
+
+        window.Validation.hasScrolled = false;
+
+        /**
+         * Extends user-defined "options.message" into the default Validation "_message".
+         */
+        function extendRules() {
+            options.rules = $.extend(
+                true,
+                {},
+                _rules,
+                options.rules
+            );
+        }
+
+        /**
+         * Extends user-defined "options.message" into the default Validation "_message".
+         */
+        function extendMessages() {
+            options.messages = $.extend(
+                true,
+                {},
+                _messages,
+                options.messages
+            );
+        }
+
+        /**
+         * Extends user-defined "options" into the default Validation "_options".
+         * Notes:
+         *  - preventExtensions prevents from modifying the Validation "_options" object structure
+         *  - filter through the "_supported" to delete unsupported "options"
+         */
+        function extendOptions() {
+
+            if (!(options instanceof Object)) {
+                options = {};
+            }
+
+            var tpmOptions = Object.preventExtensions($.extend(true, {}, _options));
+
+            for (var method in options) {
+
+                if (!options.hasOwnProperty(method) || method === "debug") {
+                    continue;
+                }
+
+                if (~["labels", "messages", "rules"].indexOf(method) && options[method] instanceof Object) {
+                    tpmOptions[method] = options[method];
+                    continue;
+                }
+
+                if (!_options[method] || !(options[method] instanceof Object)) {
+
+                    // {debug}
+                    options.debug && window.Debug.log({
+                        'node': node,
+                        'function': 'extendOptions()',
+                        'arguments': '{' + method + ': ' + JSON.stringify(options[method]) + '}',
+                        'message': 'WARNING - ' + method + ' - invalid option'
+                    });
+                    // {/debug}
+
+                    continue;
+                }
+
+                for (var type in options[method]) {
+                    if (!options[method].hasOwnProperty(type)) {
+                        continue;
+                    }
+
+                    if (!_options[method][type] || !(options[method][type] instanceof Object)) {
+
+                        // {debug}
+                        options.debug && window.Debug.log({
+                            'node': node,
+                            'function': 'extendOptions()',
+                            'arguments': '{' + type + ': ' + JSON.stringify(options[method][type]) + '}',
+                            'message': 'WARNING - ' + type + ' - invalid option'
+                        });
+                        // {/debug}
+
+                        continue;
+                    }
+
+                    for (var option in options[method][type]) {
+                        if (!options[method][type].hasOwnProperty(option)) {
+                            continue;
+                        }
+
+                        if (_supported[method] &&
+                            _supported[method][type] &&
+                            _supported[method][type][option] &&
+                            $.inArray(options[method][type][option], _supported[method][type][option]) === -1) {
+
+                            // {debug}
+                            options.debug && window.Debug.log({
+                                'node': node,
+                                'function': 'extendOptions()',
+                                'arguments': '{' + option + ': ' + JSON.stringify(options[method][type][option]) + '}',
+                                'message': 'WARNING - ' + option.toString() + ': ' + JSON.stringify(options[method][type][option]) + ' - unsupported option'
+                            });
+                            // {/debug}
+
+                            delete options[method][type][option];
+                        }
+
+                    }
+                    if (tpmOptions[method] && tpmOptions[method][type]) {
+                        tpmOptions[method][type] = $.extend(Object.preventExtensions(tpmOptions[method][type]), options[method][type]);
+                    }
+                }
+            }
+
+            // {debug}
+            if (options.debug && $.inArray(options.debug, _supported.debug !== -1)) {
+                tpmOptions.debug = options.debug;
+            }
+            // {/debug}
+
+            // @TODO Would there be a better fix to solve event conflict?
+            if (tpmOptions.dynamic.settings.trigger) {
+                if (tpmOptions.dynamic.settings.trigger === "keypress" && tpmOptions.submit.settings.clear === "keypress") {
+                    tpmOptions.dynamic.settings.trigger = "keydown";
+                }
+            }
+
+            options = tpmOptions;
+
+        }
+
+        /**
+         * Delegates the dynamic validation on data-validation and data-validation-regex attributes based on trigger.
+         *
+         * @returns {Boolean} false if the option is not set
+         */
+        function delegateDynamicValidation() {
+
+            if (!options.dynamic.settings.trigger) {
+                return false;
+            }
+
+            // {debug}
+            options.debug && window.Debug.log({
+                'node': node,
+                'function': 'delegateDynamicValidation()',
+                'message': 'OK - Dynamic Validation activated on ' + node.length + ' form(s)'
+            });
+            // {/debug}
+
+            if (!node.find('[' + _data.validation + '],[' + _data.regex + ']')[0]) {
+
+                // {debug}
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'delegateDynamicValidation()',
+                    'arguments': 'node.find([' + _data.validation + '],[' + _data.regex + '])',
+                    'message': 'ERROR - [' + _data.validation + '] not found'
+                });
+                // {/debug}
+
+                return false;
+            }
+
+            var event = options.dynamic.settings.trigger + delegateSuffix;
+            if (options.dynamic.settings.trigger !== "focusout") {
+                event += " change" + delegateSuffix + " paste" + delegateSuffix;
+            }
+
+            $.each(
+                node.find('[' + _data.validation + '],[' + _data.regex + ']'),
+                function (index, input) {
+
+                    $(input).unbind(event).on(event, function (e) {
+
+                        if ($(this).is(':disabled')) {
+                            return false;
+                        }
+
+                        //e.preventDefault();
+
+                        var input = this,
+                            keyCode = e.keyCode || null;
+
+                        _typeWatch(function () {
+
+                            if (!validateInput(input)) {
+
+                                displayOneError(input.name);
+                                _executeCallback(options.dynamic.callback.onError, [node, input, keyCode, errors[input.name]]);
+
+                            } else {
+
+                                _executeCallback(options.dynamic.callback.onSuccess, [node, input, keyCode]);
+
+                            }
+
+                            _executeCallback(options.dynamic.callback.onComplete, [node, input, keyCode]);
+
+                        }, options.dynamic.settings.delay);
+
+                    });
+                }
+            );
+        }
+
+        /**
+         * Delegates the submit validation on data-validation and data-validation-regex attributes based on trigger.
+         * Note: Disable the form submit function so the callbacks are not by-passed
+         */
+        function delegateValidation() {
+
+            _executeCallback(options.submit.callback.onInit, [node]);
+
+            var event = options.submit.settings.trigger + '.vd';
+
+            // {debug}
+            options.debug && window.Debug.log({
+                'node': node,
+                'function': 'delegateValidation()',
+                'message': 'OK - Validation activated on ' + node.length + ' form(s)'
+            });
+            // {/debug}
+
+            if (!node.find(options.submit.settings.button)[0]) {
+
+                // {debug}
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'delegateValidation()',
+                    'arguments': '{button: ' + options.submit.settings.button + '}',
+                    'message': 'ERROR - node.find("' + options.submit.settings.button + '") not found'
+                });
+                // {/debug}
+
+                return false;
+
+            }
+
+            node.on("submit", false);
+            node.find(options.submit.settings.button).off('.vd').on(event, function (e) {
+
+                e.preventDefault();
+
+                resetErrors();
+
+                _executeCallback(options.submit.callback.onValidate, [node]);
+
+                if (!validateForm()) {
+
+                    displayErrors();
+                    _executeCallback(options.submit.callback.onError, [node, errors, formData]);
+
+                } else {
+
+                    _executeCallback(options.submit.callback.onBeforeSubmit, [node]);
+
+                    (options.submit.callback.onSubmit) ? _executeCallback(options.submit.callback.onSubmit, [node, formData]) : submitForm();
+
+                    _executeCallback(options.submit.callback.onAfterSubmit, [node]);
+
+                }
+
+                // {debug}
+                options.debug && window.Debug.print();
+                // {/debug}
+
+                return false;
+
+            });
+
+        }
+
+        /**
+         * For every "data-validation" & "data-pattern" attributes that are not disabled inside the jQuery "node" object
+         * the "validateInput" function will be called.
+         *
+         * @returns {Boolean} true if no error(s) were found (valid form)
+         */
+        function validateForm() {
+
+            var isValid = isEmpty(errors);
+
+            formData = {};
+
+            $.each(
+                node.find('input:not([type="submit"]), select, textarea').not(':disabled'),
+                function(index, input) {
+
+                    input = $(input);
+
+                    var value = _getInputValue(input[0]),
+                        inputName = input.attr('name');
+
+                    if (inputName) {
+                        if (/\[]$/.test(inputName)) {
+                            inputName = inputName.replace(/\[]$/, '');
+                            if (!(formData[inputName] instanceof Array)) {
+                                formData[inputName] = [];
+                            }
+                            formData[inputName].push(value)
+                        } else {
+                            formData[inputName] = value;
+                        }
+                    }
+
+                    if (!!input.attr(_data.validation) || !!input.attr(_data.regex)) {
+                        if (!validateInput(input[0], value)) {
+                            isValid = false;
+                        }
+                    }
+                }
+            );
+
+            prepareFormData();
+
+            return isValid;
+
+        }
+
+        /**
+         * Loop through formData and build an object
+         *
+         * @returns {Object} data
+         */
+        function prepareFormData() {
+
+            var data = {},
+                matches,
+                index;
+
+            for (var i in formData) {
+                if (!formData.hasOwnProperty(i)) continue;
+
+                index = 0;
+                matches = i.split(/\[(.+?)]/g);
+
+                var tmpObject = {},
+                    tmpArray = [];
+
+                for (var k = matches.length - 1; k >= 0; k--) {
+                    if (matches[k] === "") {
+                        matches.splice(k, 1);
+                        continue;
+                    }
+
+                    if (tmpArray.length < 1) {
+                        tmpObject[matches[k]] = Number(formData[i]) || formData[i];
+                    } else {
+                        tmpObject = {};
+                        tmpObject[matches[k]] = tmpArray[tmpArray.length - 1];
+                    }
+                    tmpArray.push(tmpObject)
+
+                }
+
+                data = $.extend(true, data, tmpObject);
+
+            }
+
+            formData = data;
+
+        }
+
+        /**
+         * Prepare the information from the data attributes
+         * and call the "validateRule" function.
+         *
+         * @param {Object} input Reference of the input element
+         *
+         * @returns {Boolean} true if no error(s) were found (valid input)
+         */
+        function validateInput(input, value) {
+
+            var inputName = $(input).attr('name'),
+                value = value || _getInputValue(input);
+
+            if (!inputName) {
+
+                // {debug}
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'validateInput()',
+                    'arguments': '$(input).attr("name")',
+                    'message': 'ERROR - Missing input [name]'
+                });
+                // {/debug}
+
+                return false;
+            }
+
+            var matches = inputName.replace(/]$/, '').split(/]\[|[[\]]/g),
+                inputShortName = window.Validation.labels[inputName] ||
+                    options.labels[inputName] ||
+                    $(input).attr(_data.label) ||
+                    matches[matches.length - 1],
+
+                validationArray = $(input).attr(_data.validation),
+                validationMessage = $(input).attr(_data.validationMessage),
+                validationRegex = $(input).attr(_data.regex),
+                validationRegexReverse = !($(input).attr(_data.regexReverse) === undefined),
+                validationRegexMessage = $(input).attr(_data.regexMessage),
+
+                validateOnce = false;
+
+            if (validationArray) {
+                validationArray = _api._splitValidation(validationArray);
+            }
+
+            // Validates the "data-validation"
+            if (validationArray instanceof Array && validationArray.length > 0) {
+
+                // "OPTIONAL" input will not be validated if it's empty
+                if ($.trim(value) === '' && ~validationArray.indexOf('OPTIONAL')) {
+                    return true;
+                }
+
+                $.each(validationArray, function (i, rule) {
+
+                    if (validateOnce === true) {
+                        return true;
+                    }
+
+                    try {
+
+                        validateRule(value, rule);
+
+                    } catch (error) {
+
+                        if (validationMessage || !options.submit.settings.allErrors) {
+                            validateOnce = true;
+                        }
+
+                        error[0] = validationMessage || error[0];
+
+                        registerError(inputName, error[0].replace('$', inputShortName).replace('%', error[1]));
+
+                    }
+
+                });
+
+            }
+
+            // Validates the "data-validation-regex"
+            if (validationRegex) {
+
+                var rule = _buildRegexFromString(validationRegex);
+
+                // Do not block validation if a regexp is bad, only skip it
+                if (!(rule instanceof RegExp)) {
+                    return true;
+                }
+
+                try {
+
+                    validateRule(value, rule, validationRegexReverse);
+
+                } catch (error) {
+
+                    error[0] = validationRegexMessage || error[0];
+
+                    registerError(inputName, error[0].replace('$', inputShortName));
+
+                }
+
+            }
+
+            return !errors[inputName] || errors[inputName] instanceof Array && errors[inputName].length === 0;
+
+        }
+
+        /**
+         * Validate an input value against one rule.
+         * If a "value-rule" mismatch occurs, an error is thrown to the caller function.
+         *
+         * @param {String} value
+         * @param {*} rule
+         * @param {Boolean} [reversed]
+         *
+         * @returns {*} Error if a mismatch occurred.
+         */
+        function validateRule(value, rule, reversed) {
+
+            // Validate for "data-validation-regex" and "data-validation-regex-reverse"
+            if (rule instanceof RegExp) {
+                var isValid = rule.test(value);
+
+                if (reversed) {
+                    isValid = !isValid;
+                }
+
+                if (!isValid) {
+                    throw [options.messages['default'], ''];
+                }
+                return;
+            }
+
+            if (options.rules[rule]) {
+                if (!options.rules[rule].test(value)) {
+                    throw [options.messages[rule], ''];
+                }
+                return;
+            }
+
+            // Validate for comparison "data-validation"
+            var comparison = rule.match(options.rules.COMPARISON);
+
+            if (!comparison || comparison.length !== 4) {
+
+                // {debug}
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'validateRule()',
+                    'arguments': 'value: ' + value + ' rule: ' + rule,
+                    'message': 'WARNING - Invalid comparison'
+                });
+                // {/debug}
+
+                return;
+            }
+
+            var type = comparison[1],
+                operator = comparison[2],
+                compared = comparison[3],
+                comparedValue;
+
+            switch (type) {
+
+                // Compare input "Length"
+                case "L":
+
+                    // Only numeric value for "L" are allowed
+                    if (isNaN(compared)) {
+
+                        // {debug}
+                        options.debug && window.Debug.log({
+                            'node': node,
+                            'function': 'validateRule()',
+                            'arguments': 'compare: ' + compared + ' rule: ' + rule,
+                            'message': 'WARNING - Invalid rule, "L" compare must be numeric'
+                        });
+                        // {/debug}
+
+                        return false;
+
+                    } else {
+
+                        if (!value || eval(value.length + operator + parseFloat(compared)) === false) {
+                            throw [options.messages[operator], compared];
+                        }
+
+                    }
+
+                    break;
+
+                // Compare input "Value"
+                case "V":
+                default:
+
+                    // Compare Field values
+                    if (isNaN(compared)) {
+
+                        comparedValue = node.find('[name="' + compared + '"]').val();
+                        if (!comparedValue) {
+
+                            // {debug}
+                            options.debug && window.Debug.log({
+                                'node': node,
+                                'function': 'validateRule()',
+                                'arguments': 'compare: ' + compared + ' rule: ' + rule,
+                                'message': 'WARNING - Unable to find compared field [name="' + compared + '"]'
+                            });
+                            // {/debug}
+
+                            return false;
+                        }
+
+                        if (!value || !eval('"' + encodeURIComponent(value) + '"' + operator + '"' + encodeURIComponent(comparedValue) + '"')) {
+                            throw [options.messages[operator].replace(' characters', ''), compared];
+                        }
+
+                    } else {
+                        // Compare numeric value
+                        if (!value || isNaN(value) || !eval(value + operator + parseFloat(compared))) {
+                            throw [options.messages[operator].replace(' characters', ''), compared];
+                        }
+
+                    }
+                    break;
+
+            }
+
+        }
+
+        /**
+         * Register an error into the global "error" variable.
+         *
+         * @param {String} inputName Input where the error occurred
+         * @param {String} error Description of the error to be displayed
+         */
+        function registerError(inputName, error) {
+
+            if (!errors[inputName]) {
+                errors[inputName] = [];
+            }
+
+            error = error.capitalize();
+
+            var hasError = false;
+            for (var i = 0; i < errors[inputName].length; i++) {
+                if (errors[inputName][i] === error) {
+                    hasError = true;
+                    break;
+                }
+            }
+
+            if (!hasError) {
+                errors[inputName].push(error);
+            }
+
+        }
+
+        /**
+         * Display a single error based on "inputName" key inside the "errors" global array.
+         * The input, the label and the "inputContainer" will be given the "errorClass" and other
+         * settings will be considered.
+         *
+         * @param {String} inputName Key used for search into "errors"
+         *
+         * @returns {Boolean} false if an unwanted behavior occurs
+         */
+        function displayOneError(inputName) {
+
+            var input,
+                inputId,
+                errorContainer,
+                label,
+                html = '<div class="' + options.submit.settings.errorListClass + '" ' + _data.errorList + '><ul></ul></div>',
+                group,
+                groupInput;
+
+            if (!errors.hasOwnProperty(inputName)) {
+                return false;
+            }
+
+            input = node.find('[name="' + inputName + '"]');
+
+            label = null;
+
+            if (!input[0]) {
+
+                // {debug}
+                options.debug && window.Debug.log({
+                    'node': node,
+                    'function': 'displayOneError()',
+                    'arguments': '[name="' + inputName + '"]',
+                    'message': 'ERROR - Unable to find input by name "' + inputName + '"'
+                });
+                // {/debug}
+
+                return false;
+            }
+
+            group = input.attr(_data.group);
+
+            if (group) {
+
+                groupInput = node.find('[name="' + inputName + '"]');
+                label = node.find('[id="' + group + '"]');
+
+                if (label[0]) {
+                    label.addClass(options.submit.settings.errorClass);
+                    errorContainer = label;
+                }
+
+                //node.find('[' + _data.group + '="' + group + '"]').addClass(options.submit.settings.errorClass)
+
+            } else {
+
+                input.addClass(options.submit.settings.errorClass);
+
+                if (options.submit.settings.inputContainer) {
+                    input.parentsUntil(node, options.submit.settings.inputContainer).addClass(options.submit.settings.errorClass);
+                }
+
+                inputId = input.attr('id');
+
+                if (inputId) {
+                    label = node.find('label[for="' + inputId + '"]')[0];
+                }
+
+                if (!label) {
+                    label = input.parentsUntil(node, 'label')[0];
+                }
+
+                if (label) {
+                    label = $(label);
+                    label.addClass(options.submit.settings.errorClass);
+                }
+            }
+
+            if (options.submit.settings.display === 'inline') {
+                if (options.submit.settings.errorListContainer) {
+                    errorContainer = input.parentsUntil(node, options.submit.settings.errorListContainer);
+                } else {
+                    errorContainer = errorContainer || input.parent();
+                }
+            } else if (options.submit.settings.display === 'block') {
+                errorContainer = node;
+            }
+
+            // Prevent double error list if the previous one has not been cleared.
+            if (options.submit.settings.display === 'inline' && errorContainer.find('[' + _data.errorList + ']')[0]) {
+                return false;
+            }
+
+            if (options.submit.settings.display === "inline" ||
+                (options.submit.settings.display === "block" && !errorContainer.find('[' + _data.errorList + ']')[0])
+            ) {
+                if (options.submit.settings.insertion === 'append') {
+                    errorContainer.append(html);
+                } else if (options.submit.settings.insertion === 'prepend') {
+                    errorContainer.prepend(html);
+                }
+            }
+
+            for (var i = 0; i < errors[inputName].length; i++) {
+                errorContainer.find('[' + _data.errorList + '] ul').append('<li>' + errors[inputName][i] + '</li>');
+            }
+
+            if (options.submit.settings.clear || options.dynamic.settings.trigger) {
+
+                if (group && groupInput) {
+                    input = groupInput;
+                }
+
+                var event = "coucou" + resetSuffix;
+                if (options.submit.settings.clear) {
+                    event += " " + options.submit.settings.clear + resetSuffix;
+                    if (~['radio', 'checkbox'].indexOf(input[0].type)) {
+                        event += " change" + resetSuffix;
+                    }
+                }
+                if (options.dynamic.settings.trigger) {
+                    event += " " + options.dynamic.settings.trigger + resetSuffix;
+                    if (options.dynamic.settings.trigger !== "focusout" && !~['radio', 'checkbox'].indexOf(input[0].type)) {
+                        event += " change" + resetSuffix + " paste" + resetSuffix;
+                    }
+                }
+
+                input.unbind(event).on(event, function (a, b, c, d, e) {
+
+                    return function () {
+                        if (e) {
+                            if ($(c).hasClass(options.submit.settings.errorClass)) {
+                                resetOneError(a, b, c, d, e);
+                            }
+                        } else if ($(b).hasClass(options.submit.settings.errorClass)) {
+                            resetOneError(a, b, c, d);
+                        }
+                    };
+
+                }(inputName, input, label, errorContainer, group));
+            }
+
+            if (options.submit.settings.scrollToError && !window.Validation.hasScrolled) {
+
+                window.Validation.hasScrolled = true;
+
+                var offset = parseFloat(options.submit.settings.scrollToError.offset) || 0,
+                    duration = parseFloat(options.submit.settings.scrollToError.duration) || 500,
+                    handle = (options.submit.settings.display === 'block') ? errorContainer : input;
+
+                $('html, body').animate({
+                    scrollTop: handle.offset().top + offset
+                }, duration);
+
+            }
+
+        }
+
+        /**
+         * Display all of the errors
+         */
+        function displayErrors() {
+
+            for (var inputName in errors) {
+                if (!errors.hasOwnProperty(inputName)) continue;
+                displayOneError(inputName);
+            }
+
+        }
+
+        /**
+         * Remove an input error.
+         *
+         * @param {String} inputName Key reference to delete the error from "errors" global variable
+         * @param {Object} input jQuery object of the input
+         * @param {Object} label jQuery object of the input's label
+         * @param {Object} container jQuery object of the "errorList"
+         * @param {String} [group] Name of the group if any (ex: used on input radio)
+         */
+        function resetOneError(inputName, input, label, container, group) {
+
+            delete errors[inputName];
+
+            if (container) {
+
+                //window.Validation.hasScrolled = false;
+
+                if (options.submit.settings.inputContainer) {
+                    (group ? label : input).parentsUntil(node, options.submit.settings.inputContainer).removeClass(options.submit.settings.errorClass);
+                }
+
+                label && label.removeClass(options.submit.settings.errorClass);
+
+                input.removeClass(options.submit.settings.errorClass);
+
+                if (options.submit.settings.display === 'inline') {
+                    container.find('[' + _data.errorList + ']').remove();
+                }
+
+            } else {
+
+                if (!input) {
+                    input = node.find('[name="' + inputName + '"]');
+
+                    if (!input[0]) {
+
+                        // {debug}
+                        options.debug && window.Debug.log({
+                            'node': node,
+                            'function': 'resetOneError()',
+                            'arguments': '[name="' + inputName + '"]',
+                            'message': 'ERROR - Unable to find input by name "' + inputName + '"'
+                        });
+                        // {/debug}
+
+                        return false;
+                    }
+                }
+
+                input.trigger('coucou' + resetSuffix);
+            }
+
+        }
+
+        /**
+         * Remove all of the input error(s) display.
+         */
+        function resetErrors() {
+
+            errors = [];
+            window.Validation.hasScrolled = false;
+
+            node.find('[' + _data.errorList + ']').remove();
+            node.find('.' + options.submit.settings.errorClass).removeClass(options.submit.settings.errorClass);
+
+        }
+
+        /**
+         * Submits the form once it succeeded the validation process.
+         * Note:
+         * - This function will be overridden if "options.submit.settings.onSubmit" is defined
+         * - The node can't be submitted by jQuery since it has been disabled, use the form native submit function instead
+         */
+        function submitForm() {
+
+            node[0].submit()
+
+        }
+
+        /**
+         * Destroy the Validation instance
+         *
+         * @returns {Boolean}
+         */
+        function destroy() {
+
+            resetErrors();
+            node.find('[' + _data.validation + '],[' + _data.regex + ']').off(delegateSuffix + ' ' + resetSuffix);
+
+            node.find(options.submit.settings.button).off(delegateSuffix).on('click' + delegateSuffix, function () {
+                $(this).closest('form')[0].submit();
+            });
+
+            //delete window.Validation.form[node.selector];
+
+            return true;
+
+        }
+
+        /**
+         * @private
+         * Helper to get the value of an regular, radio or chackbox input
+         *
+         * @param input
+         *
+         * @returns {String} value
+         */
+        var _getInputValue = function (input) {
+
+            var value;
+
+            // Get the value or state of the input based on its type
+            switch ($(input).attr('type')) {
+                case 'checkbox':
+                    value = ($(input).is(':checked')) ? 1 : '';
+                    break;
+                case 'radio':
+                    value = node.find('input[name="' + $(input).attr('name') + '"]:checked').val

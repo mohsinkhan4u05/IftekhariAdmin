@@ -1,0 +1,120 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h3>
+                Add Category
+
+            </h3>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="categoryForm" name="categoryForm" ng-submit="AddCategory()" novalidate>
+                            <div class="row">
+
+                                <div class="form-group">
+                                    <div class="col-md-6" ng-class="{ 'has-error' : categoryForm.Name.$invalid && !categoryForm.Name.$pristine }">
+                                        <label>Name <b style="color: red">*</b></label>
+                                        <input type="text" name="Name" class="form-control" ng-model="Category.Name" required>
+                                        <p ng-show="categoryForm.Name.$invalid && !categoryForm.Name.$pristine" class="help-block">Name is required.</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <button ng-class="categoryForm.$invalid ? 'btn btn-default width-full margin-top-20' : 'btn btn-primary width-full margin-top-20'" type="submit" ng-disabled="categoryForm.$invalid">Add</button>
+                                    </div>
+                                </div>
+                                
+                                
+
+                            </div><br/>
+                            
+                            <br />
+                            <div class="row">
+                                
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->

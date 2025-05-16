@@ -1,0 +1,223 @@
+<div class="page-content-inner">
+    <!-- Form Validation -->
+    <section class="panel">
+        <div class="panel-heading">
+            <h4>Add New Customer</h4>          
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="margin-bottom-50">
+
+                        <!-- Popup Form Validation -->
+                        <form id="customerForm" name="customerForm" ng-submit="AddCustomer()" novalidate>
+                            <div class="row">
+                                <div class="form-group">
+                                    <div ng-class="{ 'has-error' : customerForm.CustomerID.$invalid && !customerForm.CustomerID.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Customer ID <b style="color: red">*</b></label>
+                                            <input type="text" name="CustomerID" class="form-control" ng-model="customer.CustomerID" required>
+                                            <p ng-show="customerForm.CustomerID.$invalid && !customerForm.CustomerID.$pristine" class="help-block">Customer ID is required.</p>
+                                        </div>
+                                    </div> 
+                                    <div ng-class="{ 'has-error' : customerForm.Name.$invalid && !customerForm.Name.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Name <b style="color: red">*</b></label>
+                                            <input type="text" name="Name" class="form-control" ng-model="customer.Name" required>
+                                            <p ng-show="customerForm.Name.$invalid && !customerForm.Name.$pristine" class="help-block">Name is required.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div><br />
+
+                            <div class="row">
+                                <div class="form-group">
+                                    
+                                    <div ng-class="{ 'has-error' : customerForm.Area.$invalid && !customerForm.Area.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Area <b style="color: red">*</b></label>
+                                            <input type="text" name="Area" class="form-control" ng-model="customer.Area" required>
+                                            <p ng-show="customerForm.Area.$invalid && !customerForm.Area.$pristine" class="help-block">Area is required.</p>
+                                        </div>
+                                    </div>
+                                    <div ng-class="{ 'has-error' : customerForm.Mobile.$invalid && !customerForm.Mobile.$pristine }">
+                                        <div class="col-md-6">
+                                            <label>Mobile <b style="color: red">*</b></label>
+                                            <input type="text" name="Mobile" class="form-control" ng-model="customer.Mobile" maxlength="10" pattern="[0-9]{10}" required>
+                                            <p ng-show="customerForm.Mobile.$invalid && !customerForm.Mobile.$pristine" class="help-block">Mobile number is not valid..</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div><br />
+
+                            <div class="row">
+                                <div class="form-group">
+                                    <div class="form-group" ng-class="{ 'has-error': customerForm.Operator.$invalid }">
+                                        <div class="col-md-6 ">
+
+                                            <label>Operator <b style="color: red">*</b></label>
+                                            <ui-select name="Operator" ng-model="customer.Operator" on-select="onSelectCallback($item, $model)" ng-required="true" theme="bootstrap" style="width: 100%;">
+                                                <ui-select-match placeholder="Select...">{{$select.selected.Name}}</ui-select-match>
+                                                <ui-select-choices repeat="item in operatorList | filter: $select.search">
+                                                    <div ng-bind-html="item.Name | highlight: $select.search"></div>
+                                                    <!--<small ng-bind-html="item.Email | highlight: $select.search"></small>-->
+                                                </ui-select-choices>
+                                            </ui-select>
+                                           
+                                        </div>
+                                    </div>
+
+                                        
+                                        <div class="col-md-6">
+                                            <label>Status <b style="color: red">*</b></label> <br/>
+                                            <ui-select name="Status" ng-model="customer.Status" on-select="onSelectCallbackStatus($item, $model)" ng-required="true" style="width: 100%;">
+                                                <ui-select-match placeholder="Select...">{{$select.selected}}</ui-select-match>
+                                                <ui-select-choices repeat="item in statusOptions | filter: $select.search">
+                                                    <div ng-bind-html="item | highlight: $select.search"></div>
+                                                    <!--<small ng-bind-html="item.Email | highlight: $select.search"></small>-->
+                                                </ui-select-choices>
+                                            </ui-select>
+                                        </div>
+
+
+
+                                    </div>
+                               
+                            </div><br />
+
+                            <div class="row">
+                                <div class="form-group">
+
+                                    <div>
+                                        <div class=" col-md-6">
+                                            <label>Registration Date</label>
+                                            <div class='input-group date' id='datetimepickerCustomerRegDate'>
+                                                <input type='text' class="form-control" ng-model="customer.RegDate | date:'fullDate'" data-date-time-picker />
+                                                <span class="input-group-addon">
+                                                    <i class="icmn-calendar"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class=" col-md-6">
+                                        <label>Due Date</label>
+                                        <div class='input-group date' id='datetimepickerCustomerDueDate'>
+                                            <input type='text' class="form-control" ng-model="customer.DueDate | date:'fullDate'" data-date-time-picker />
+                                            <span class="input-group-addon">
+                                                <i class="icmn-calendar"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+
+
+
+                                </div>
+
+                            </div><br />
+                            <div class="row">
+                                <div class="form-group">
+
+                                    <div class="col-md-6">
+                                        <label>Has Bnet Router </label> <br/>
+                                        <switch name="hasRouter" ng-model="hasRouter" ng-change="changeCallback"></switch>
+
+                                    </div>
+                                    <div class=" col-md-6">
+                                        <label>Welcome SMS</label>
+                                        <div>
+                                            <switch name="sendWelcome" ng-model="sendWelcome" ng-change="changeCallback"></switch>
+                                        </div>
+                                    </div>
+                                 </div>
+                                </div>
+                            <br />
+                            <div class="row">
+                                <div class="form-group">
+                                    <!--<button class="btn btn-primary" type="submit" ng-disabled="customerForm.$invalid">Add</button>-->
+                                    <button ng-class="customerForm.$invalid ? 'btn btn-default width-full margin-top-10' : 'btn btn-primary width-full margin-top-10'" type="submit" ng-disabled="customerForm.$invalid">Add Customer</button>
+                                </div>
+                            </div>
+
+                        </form>
+                        <!-- End Popup Form Validation -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </section>
+
+
+    <!-- End Form Validation -->
+</div>
+<!-- Page Scripts -->
+<script>
+    $(function () {
+
+        $('#form-validation').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('#form-validation-simple').validate({
+            submit: {
+                settings: {
+                    inputContainer: '.form-group',
+                    errorListClass: 'form-control-error-list',
+                    errorClass: 'has-danger'
+                }
+            }
+        });
+
+        $('.select2').select2();
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' ']
+        });
+
+        $('.datepicker-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            }
+        });
+
+        $('.datepicker-only-init').datetimepicker({
+            widgetPositioning: {
+                horizontal: 'left'
+            },
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            format: 'LL'
+        });
+
+        $('.datepicker-inline-init').datetimepicker({
+            icons: {
+                time: "fa fa-clock-o",
+                date: "fa fa-calendar",
+                up: "fa fa-arrow-up",
+                down: "fa fa-arrow-down"
+            },
+            inline: true,
+            sideBySide: false
+        });
+
+    });
+</script>
+<!-- End Page Scripts-->
